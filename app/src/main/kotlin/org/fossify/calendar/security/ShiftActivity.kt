@@ -101,10 +101,17 @@ class ShiftActivity : Activity() {
     private fun page(title:String,tag:String) {
         rememberDraft();controls.clear();screen=tag;body.removeAllViews()
         val header=LinearLayout(this).apply { gravity=Gravity.CENTER_VERTICAL }
-        header.addView(ImageView(this).apply { setImageResource(applicationInfo.icon);contentDescription="Shift Calendar" },LinearLayout.LayoutParams(dp(52),dp(52)))
-        header.addView(TextView(this).apply { text="Shift Calendar\n${BuildConfig.VERSION_NAME}";textSize=20f;setTextColor(navy);setPadding(dp(12),0,0,0) },LinearLayout.LayoutParams(0,-2,1f));body.addView(header)
-        buttons("Calendar" to {calendar()},"Schedule" to {board()},"Uncovered" to {board(true)},"Personnel" to {people()},"Posts" to {posts()},"Share / TXT" to {export()})
-        text(title,22,true)
+        header.addView(ImageView(this).apply { setImageResource(applicationInfo.icon);contentDescription="Shift Calendar" },LinearLayout.LayoutParams(dp(40),dp(40)))
+        header.addView(TextView(this).apply { text="Shift Calendar\n${BuildConfig.VERSION_NAME}";textSize=16f;setTextColor(navy);setPadding(dp(8),0,dp(4),0) },LinearLayout.LayoutParams(0,-2,1f))
+        body.addView(header)
+        val navigation=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;visibility=View.GONE}
+        button("Menu",header) {navigation.visibility=if(navigation.visibility==View.VISIBLE) View.GONE else View.VISIBLE}.apply {
+            minWidth=0;minimumWidth=0;setPadding(dp(4),0,dp(4),0);contentDescription="Show or hide navigation menu"
+            layoutParams=LinearLayout.LayoutParams(dp(72),dp(48))
+        }
+        body.addView(navigation)
+        buttons("Calendar" to {calendar()},"Schedule" to {board()},"Uncovered" to {board(true)},"Personnel" to {people()},"Posts" to {posts()},"Share / TXT" to {export()},"Settings / backup" to {settings()},"Enter schedules" to {bulk()},parent=navigation)
+        text(title,20,true)
     }
     private fun text(value:String,size:Int=16,bold:Boolean=false,parent:LinearLayout=body):TextView = TextView(this).also {
         it.text=value;it.textSize=size.toFloat();it.setTextColor(navy);it.setPadding(0,dp(7),0,dp(7));it.setTextIsSelectable(true)
@@ -132,11 +139,11 @@ class ShiftActivity : Activity() {
         }
         body.addView(e,LinearLayout.LayoutParams(-1,-2));controls[label]={e.text.toString()};return e
     }
-    private fun spinner(label:String,values:List<String>):Spinner {
-        text(label,14,true)
+    private fun spinner(label:String,values:List<String>,parent:LinearLayout=body):Spinner {
+        text(label,14,true,parent)
         val s=Spinner(this).apply { adapter=ArrayAdapter(this@ShiftActivity,android.R.layout.simple_spinner_dropdown_item,values);minimumHeight=dp(48) }
         values.indexOf(drafts[screen]?.get(label)).takeIf { it>=0 }?.let { s.setSelection(it) }
-        body.addView(s,LinearLayout.LayoutParams(-1,-2));controls[label]={s.selectedItem?.toString().orEmpty()};return s
+        parent.addView(s,LinearLayout.LayoutParams(-1,-2));controls[label]={s.selectedItem?.toString().orEmpty()};return s
     }
     private fun check(label:String,initial:Boolean=false):CheckBox = CheckBox(this).also {
         it.text=label;it.textSize=16f;it.isChecked=drafts[screen]?.get(label)?.toBooleanStrictOrNull()?:initial;it.minHeight=dp(48)
@@ -176,23 +183,26 @@ class ShiftActivity : Activity() {
     private fun monthShifts() = r.shifts.filter { YearMonth.from(it.startTime())==month }
     private fun summary(shifts:List<Shift>) {
         if(shifts.isEmpty()) text("No required shifts in this selection. Add requirements first; a blank calendar does not prove coverage.")
-        else text("${shifts.size} required shifts · ${shifts.count { r.open(it)>0 }} uncovered · ${shifts.sumOf { r.open(it) }} open positions",16,true)
+        else text("${shifts.size} shifts · ${shifts.count { r.open(it)>0 }} uncovered · ${shifts.sumOf { r.open(it) }} open",15,true)
     }
     private fun calendar() {
         page(month.format(DateTimeFormatter.ofPattern("MMMM uuuu",Locale.US)),"calendar")
-        buttons("Previous month" to {month=month.minusMonths(1);day=null;calendar()},"Next month" to {month=month.plusMonths(1);day=null;calendar()},"Today" to {month=YearMonth.now();day=LocalDate.now();calendar()},"Settings / backup" to {settings()})
+        val months=LinearLayout(this);body.addView(months)
+        listOf<Pair<String,()->Unit>>("Previous" to {month=month.minusMonths(1);day=null;calendar()},"Today" to {month=YearMonth.now();day=LocalDate.now();calendar()},"Next" to {month=month.plusMonths(1);day=null;calendar()}).forEach { (label,action) ->
+            button(label,months,action).apply {minWidth=0;minimumWidth=0;setPadding(dp(2),0,dp(2),0);layoutParams=LinearLayout.LayoutParams(0,dp(48),1f)}
+        }
         val shifts=monthShifts();summary(shifts)
-        text("! means open positions. Tap a date to see the shifts. Dates refer to shift START dates.",14)
+        text("! = open positions. Tap a shift's start date.",12).setPadding(0,dp(2),0,dp(2))
         val offset=month.atDay(1).dayOfWeek.value%7
         val headings=LinearLayout(this);body.addView(headings)
-        listOf("Sun","Mon","Tue","Wed","Thu","Fri","Sat").forEach { label -> headings.addView(TextView(this).apply { text=label;gravity=Gravity.CENTER;textSize=12f },LinearLayout.LayoutParams(0,dp(28),1f)) }
+        listOf("Sun","Mon","Tue","Wed","Thu","Fri","Sat").forEach { label -> headings.addView(TextView(this).apply { text=label;gravity=Gravity.CENTER;textSize=12f },LinearLayout.LayoutParams(0,dp(24),1f)) }
         val cells=List(offset){0}+(1..month.lengthOfMonth()).toList()
         cells.chunked(7).forEach { week ->
             val row=LinearLayout(this);body.addView(row)
             (0..6).forEach { index ->
                 val n=week.getOrElse(index){0}
                 val v=Button(this).apply {
-                    minWidth=0;minimumWidth=0;minHeight=dp(58);setPadding(0,0,0,0);textSize=13f;isAllCaps=false
+                    minWidth=0;minimumWidth=0;minHeight=dp(48);setPadding(0,0,0,0);textSize=13f;isAllCaps=false
                     if(n>0) {
                         val date=month.atDay(n);val open=shifts.filter { it.startTime().toLocalDate()==date }.sumOf { r.open(it) }
                         text=if(open>0) "$n\n!$open" else n.toString();setTextColor(if(open>0) Color.rgb(164,29,42) else navy)
@@ -200,7 +210,7 @@ class ShiftActivity : Activity() {
                         setOnClickListener { if(!busy) {day=date;calendar()} }
                     } else {text="";visibility=View.INVISIBLE}
                 }
-                row.addView(v,LinearLayout.LayoutParams(0,dp(60),1f))
+                row.addView(v,LinearLayout.LayoutParams(0,dp(48),1f))
             }
         }
         buttons("Required shifts" to {required()},"Enter schedules" to {bulk()})
@@ -211,13 +221,20 @@ class ShiftActivity : Activity() {
         page(if(uncovered) "Uncovered shifts — $month" else "Schedule — $month",if(uncovered) "uncovered" else "board")
         buttons("Previous month" to {month=month.minusMonths(1);board(uncovered)},"Next month" to {month=month.plusMonths(1);board(uncovered)},"Required shifts" to {required()},"Enter schedules" to {bulk()})
         val all=monthShifts().sortedWith(compareBy<Shift>{it.startTime().toInstant()}.thenBy{it.postId})
-        summary(all);text("Coverage is calculated only from requirements you entered.",14)
-        val person=spinner("Filter person",listOf("All personnel")+r.people.map { it.name })
-        val post=spinner("Filter post",listOf("All posts")+r.posts.map { it.name })
+        summary(all)
+        val filters=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;visibility=View.GONE}
+        button("Filter by person / post") {filters.visibility=if(filters.visibility==View.VISIBLE) View.GONE else View.VISIBLE}
+        body.addView(filters)
+        val person=spinner("Filter person",listOf("All personnel")+r.people.map { it.name },filters)
+        val post=spinner("Filter post",listOf("All posts")+r.posts.map { it.name },filters)
+        val filterStatus=text("",14)
+        filterStatus.visibility=View.GONE
         val list=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL};body.addView(list)
         fun show() {
             list.removeAllViews()
             val p=r.people.getOrNull(person.selectedItemPosition-1)?.id;val location=r.posts.getOrNull(post.selectedItemPosition-1)?.id
+            filterStatus.text=listOfNotNull(p?.let {id->r.people.first {it.id==id}.name},location?.let {id->r.posts.first {it.id==id}.name}).joinToString(" · ")
+            filterStatus.visibility=if(p==null&&location==null) View.GONE else View.VISIBLE
             val filtered=all.filter { s -> (!uncovered || r.open(s)>0) && (location==null || s.postId==location) && (p==null || r.assignments.any { it.shiftId==s.id && it.personId==p }) }
             if(filtered.isEmpty()) text("No shifts match these filters.",parent=list)
             filtered.forEach { shiftCard(it,list) }
@@ -239,6 +256,13 @@ class ShiftActivity : Activity() {
         text("${r.coverage(s)} · ${r.assigned(s).size}/${s.required} assigned · ${r.open(s)} open",16,true,card)
         if(s.notes.isNotBlank()) text(s.notes,14,parent=card)
         buttons("Assign personnel" to {assign(s)},"Edit shift" to {editShift(s)},parent=card)
+        button("Share this shift",card) {
+            val text=ScheduleText.format(r,listOf(s),compact=true)
+            AlertDialog.Builder(this).setTitle("Share selected shift")
+                .setItems(arrayOf("Copy text","Manual SMS","Share text","Send individual SMS (opt-in)")) {_,which -> guard {
+                    when(which) {0->copyText(text);1->SmsSharing.compose(this,text,"");2->shareText(text);3->SmsSharing.direct(this,r,listOf(s),null)}
+                }}.setNegativeButton("Cancel",null).show()
+        }
     }
     private fun people() {
         page("Personnel","people");button("Add person") {editPerson(null)}

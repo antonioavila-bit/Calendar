@@ -69,7 +69,15 @@ class ScheduleDeviceTest {
         }
         fail("Did not find UI label: $label")
     }
-    private fun press(s:ActivityScenario<ShiftActivity>,label:String) {s.onActivity {a->all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}.performClick()}}
+    private fun press(s:ActivityScenario<ShiftActivity>,label:String) {s.onActivity {a->
+        var target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}
+        if(!target.isShown) {
+            all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Menu"}.performClick()
+            target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}
+        }
+        assertTrue("Navigation target is hidden: $label",target.isShown)
+        target.performClick()
+    }}
     @Test fun launcherAndPersonEntryPersistWithoutNetwork() {
         ActivityScenario.launch(ShiftActivity::class.java).use {s->
             waitFor(s,"Required shifts");press(s,"Personnel");waitFor(s,"Add person");press(s,"Add person");waitFor(s,"Save person")
