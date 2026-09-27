@@ -1,0 +1,11 @@
+# Preview03 continuation — three README gaps
+
+Work remains on antonioavila-bit/Calendar, branch security/offline-shifts-v1, Draft PR1. Only the separately authorized Offline-Security-Calendar planning repository may also receive documentation. Both donors remain read/copy-only.
+
+Base accepted source: b9656446e4274aac6568e96233b681679361c449; preview02 run36294134263 (#7). Preview03 version0.1.0-preview03/code102 implements independent Templates CRUD/apply, explicit arbitrary SMS subsets, and six board sort options with persistent ascending/descending preferences. See PREVIEW03_FEATURE_GAPS.md for exact behavior and limitations.
+
+SQLite schema2 adds only the templates table on upgrade from schema1, preserving records/revision. Templates are part of the validated atomic roster; backup JSON version2 includes templates and accepts old version1 files without templates. A restored old backup replaces all local records and therefore has zero templates, explicitly shown in restore confirmation. Existing generated shifts are snapshots, not live template links.
+
+Expected verification: 81 JVM/JUnit tests (previous55 plus26), 25 instrumented tests per API33/tablet and API35/phone (previous16 plus9). All81 passed the local Kotlin assertion harness before upload; do NOT equate that with actual CI or Samsung acceptance. Preserve every previous regression test and strict device-job count. New tests cover template CRUD/use/cancel, all sorts/filter stability, selected-message privacy/picker cancel/recreation, v1 DB migration, encrypted template round-trip, old backup compatibility, malformed backup rejection and stale writes. No real SMS is sent by tests.
+
+Fetch the new workflow's outcome and APK/evidence digests before delivering preview03. Keep PR1 draft; do not merge the application or claim production readiness. Stable protected signing is still open; compare actual preview certificates and do not instruct users to uninstall data-bearing apps. Hardware Galaxy S25/Tab S7, Samsung IME/S Pen offline behavior, carrier SMS, actual file-picker/USB/Windows Word printing, reminder timing/reboots, scale and signed package upgrades remain open. The 90-day reminder horizon, finite recurrence, no exposed personal-calendar widgets/ICS, and no bundled handwriting recognizer are unchanged.
