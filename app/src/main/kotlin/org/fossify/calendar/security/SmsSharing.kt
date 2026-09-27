@@ -25,7 +25,12 @@ object SmsSharing {
             throw IllegalArgumentException("No SMS composer is available on this device. Use Copy, Share or TXT export and transfer the schedule to a messaging-capable phone.",e)
         }
     }
-    fun direct(activity:Activity,roster:Roster,shifts:List<Shift>,person:Person?) {
+    fun direct(activity:Activity,roster:Roster,shifts:List<Shift>,person:Person?,selectedIds:Set<String>?=null) {
+        val ids=selectedIds ?: if(person!=null) setOf(person.id) else roster.people.filter {p -> shifts.any {s -> roster.assignments.any {it.shiftId==s.id && it.personId==p.id}}}.map {it.id}.toSet()
+        val plans=SmsBatch.prepare(roster,shifts,ids)
+        require(plans.size in 1..20) {"Select 1–20 recipients at a time for direct SMS."}
+        val numbers=plans.map(SmsBatch::number)
+        require(numbers.distinct().size==numbers.size) {"Selected people share a phone number. Review their numbers before direct SMS. Nothing sent."}
         val prefs=activity.getSharedPreferences("security-settings",Context.MODE_PRIVATE)
         require(prefs.getBoolean("direct-sms",false)) {"Direct SMS is off. Enable it in Settings only when you want the app to send after your final confirmation."}
         require(activity.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)) {"This tablet/phone has no carrier SMS hardware. Use Copy or export."}
@@ -36,16 +41,11 @@ object SmsSharing {
         val subscription=SubscriptionManager.getDefaultSmsSubscriptionId()
         require(SubscriptionManager.isValidSubscriptionId(subscription)) {"Choose a default SMS SIM in Android settings, then retry. No messages were sent."}
         @Suppress("DEPRECATION") val manager=SmsManager.getSmsManagerForSubscriptionId(subscription)
-        val people=if(person!=null) listOf(person) else roster.people.filter {p -> shifts.any {s->roster.assignments.any {it.shiftId==s.id&&it.personId==p.id}}}
-        require(people.size in 1..20) {"Select 1–20 recipients at a time."}
         data class Message(val name:String,val phone:String,val parts:ArrayList<String>)
-        val messages=people.map {p ->
-            val number=p.phone.replace(Regex("[\\s()\\-]"),"")
-            require(Regex("\\+?[0-9]{7,15}").matches(number)) {"Enter a valid full SMS phone number for ${p.name}. No messages sent."}
-            val personal=shifts.filter {s->roster.assignments.any {it.shiftId==s.id&&it.personId==p.id}}
-            val parts=manager.divideMessage(ScheduleText.format(roster,personal,p.id,true))
+        val messages=plans.mapIndexed {index,p ->
+            val parts=manager.divideMessage(p.text)
             require(parts.size<=20) {"${p.name}'s schedule is more than 20 SMS segments. Select a shorter date range or export TXT."}
-            Message(p.name,number,parts)
+            Message(p.name,numbers[index],parts)
         }
         require(messages.sumOf {it.parts.size}<=100) {"This batch exceeds 100 SMS segments. Reduce the range/recipient count."}
         val review=messages.joinToString("\n\n") {m -> "${m.name} · ${m.phone} · ${m.parts.size} SMS segments\n"+m.parts.joinToString("")}

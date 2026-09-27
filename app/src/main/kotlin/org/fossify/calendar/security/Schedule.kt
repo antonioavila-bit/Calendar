@@ -16,7 +16,7 @@ data class Shift(val id: String = UUID.randomUUID().toString(), val postId: Stri
 }
 data class Assignment(val shiftId: String, val personId: String)
 data class Roster(val people: List<Person> = emptyList(), val posts: List<Post> = emptyList(),
-    val shifts: List<Shift> = emptyList(), val assignments: List<Assignment> = emptyList()) {
+    val shifts: List<Shift> = emptyList(), val assignments: List<Assignment> = emptyList(), val templates: List<ShiftTemplate> = emptyList()) {
     fun assigned(s: Shift) = people.filter { p -> assignments.any { it.shiftId == s.id && it.personId == p.id } }
     fun open(s: Shift) = (s.required - assigned(s).size).coerceAtLeast(0)
     fun coverage(s: Shift): String = when (assigned(s).size) {
@@ -26,8 +26,10 @@ data class Roster(val people: List<Person> = emptyList(), val posts: List<Post> 
         else -> "OVERSTAFFED"
     }
     fun validate(): Roster {
-        require(people.size <= 2000 && posts.size <= 2000 && shifts.size <= 20000 && assignments.size <= 100000) { "Schedule exceeds supported size." }
+        require(templates.size <= 2000 && people.size <= 2000 && posts.size <= 2000 && shifts.size <= 20000 && assignments.size <= 100000) { "Schedule exceeds supported size." }
         fun unique(values: List<String>, label: String) { require(values.size == values.toSet().size) { "Duplicate $label." } }
+        unique(templates.map { it.id }, "template ID"); unique(templates.map { nameKey(it.name) }, "template name")
+        templates.forEach { it.validate(posts) }
         unique(people.map { it.id }, "person ID"); unique(posts.map { it.id }, "post ID"); unique(shifts.map { it.id }, "shift ID")
         unique(people.map { nameKey(it.name) }, "person name"); unique(posts.map { nameKey(it.name) }, "post name")
         require((people.map { it.id } + posts.map { it.id } + shifts.map { it.id }).all { it.isNotBlank() && it.length <= 100 }) { "Invalid record ID." }

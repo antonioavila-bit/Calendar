@@ -86,6 +86,9 @@ class ShiftActivity : Activity() {
         when {
             target=="people" -> people()
             target=="posts" -> posts()
+            target=="templates" -> templates()
+            target.startsWith("template-use:") -> r.templates.firstOrNull { it.id==target.substringAfter(':') }?.let(::useTemplate) ?: templates()
+            target.startsWith("template:") -> editTemplate(r.templates.firstOrNull { it.id==target.substringAfter(':') })
             target=="bulk" -> bulk()
             target=="required" -> required()
             target=="export" -> export()
@@ -110,7 +113,7 @@ class ShiftActivity : Activity() {
             layoutParams=LinearLayout.LayoutParams(dp(72),dp(48))
         }
         body.addView(navigation)
-        buttons("Calendar" to {calendar()},"Schedule" to {board()},"Uncovered" to {board(true)},"Personnel" to {people()},"Posts" to {posts()},"Share / TXT" to {export()},"Settings / backup" to {settings()},"Enter schedules" to {bulk()},parent=navigation)
+        buttons("Calendar" to {calendar()},"Schedule" to {board()},"Uncovered" to {board(true)},"Personnel" to {people()},"Posts" to {posts()},"Templates" to {templates()},"Share / TXT" to {export()},"Settings / backup" to {settings()},"Enter schedules" to {bulk()},parent=navigation)
         text(title,20,true)
     }
     private fun text(value:String,size:Int=16,bold:Boolean=false,parent:LinearLayout=body):TextView = TextView(this).also {
@@ -233,6 +236,10 @@ class ShiftActivity : Activity() {
         val pattern=spinner("Shift / time",listOf("All shifts")+patterns,filters)
         val status=spinner("Coverage status",listOf("All statuses","UNFILLED","PARTIALLY FILLED","FILLED","OVERSTAFFED","CONFLICTS"),filters)
         val search=field("Search names, posts, shifts or notes",parent=filters)
+        val sort=spinner("Sort by",BoardSort.values().map {it.title},filters)
+        val direction=spinner("Sort direction",listOf("Ascending","Descending"),filters)
+        if(drafts[tag]?.get("Sort by")==null) sort.setSelection(BoardSort.from(prefs.getString("board-sort",null)).ordinal)
+        if(drafts[tag]?.get("Sort direction")==null) direction.setSelection(if(prefs.getBoolean("board-descending",false)) 1 else 0)
         val list=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL};body.addView(list)
         fun show() {
             val selectedStatus=status.selectedItem.toString()
@@ -244,15 +251,20 @@ class ShiftActivity : Activity() {
             text("${from.text} through ${through.text}",14,parent=list)
             summary(filtered,list)
             if(selectedStatus=="CONFLICTS") text("Conflicting assignments are blocked before saving. This filter checks for overlaps in saved assignments.",14,parent=list)
-            filtered.forEach {shiftCard(it,list)}
+            val order=BoardSort.values()[sort.selectedItemPosition]
+            val descending=direction.selectedItemPosition==1
+            prefs.edit().putString("board-sort",order.name).putBoolean("board-descending",descending).apply()
+            text("Sorted by ${order.title} · ${direction.selectedItem}",14,parent=list)
+            ScheduleOrder.sort(r,filtered,order,descending).forEach {shiftCard(it,list)}
         }
         button("Apply filters",filters) {show();keyboard();filters.visibility=View.GONE}
         val listener=object:AdapterView.OnItemSelectedListener {override fun onNothingSelected(parent:AdapterView<*>?) {};override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long){guard {show()}}}
-        listOf(person,post,pattern,status).forEach {it.onItemSelectedListener=listener};guard {show()}
+        listOf(person,post,pattern,status,sort,direction).forEach {it.onItemSelectedListener=listener};guard {show()}
         button("Copy a date range / week") {copyRange()}
     }
     private fun shiftCard(s:Shift,parent:LinearLayout=body) {
         val card=LinearLayout(this).apply {
+            contentDescription="shift-card:${s.id}"
             orientation=LinearLayout.VERTICAL;setPadding(dp(12),dp(8),dp(12),dp(12))
             background=GradientDrawable().apply {setColor(Color.rgb(242,246,250));cornerRadius=dp(10).toFloat();setStroke(dp(1),Color.rgb(209,218,230))}
         }
@@ -292,11 +304,61 @@ class ShiftActivity : Activity() {
         page(if(p==null) "Add post" else "Edit post","post:${p?.id?:"new"}");formActions()
         val name=field("Post name",p?.name.orEmpty());val notes=field("Post notes",p?.notes.orEmpty(),true)
         button("Save post") {val updated=Post(p?.id?:UUID.randomUUID().toString(),name.text.toString().trim(),notes.text.toString());save(r.copy(posts=r.posts.filterNot {it.id==updated.id}+updated),after={posts()})}
-        if(p!=null) button("Delete post") {require(r.shifts.none {it.postId==p.id}) {"This post has required shifts. Remove those requirements explicitly before deleting it."};ask("Delete post?",p.name,"Delete") {save(r.copy(posts=r.posts.filterNot {it.id==p.id}),after={posts()})} }
+        if(p!=null) button("Delete post") {require(r.shifts.none {it.postId==p.id} && r.templates.none {it.postId==p.id}) {"This post is used by shifts or templates. Remove those requirements or change the templates first."};ask("Delete post?",p.name,"Delete") {save(r.copy(posts=r.posts.filterNot {it.id==p.id}),after={posts()})} }
+    }
+    private fun templates() {
+        page("Saved shift templates","templates")
+        text("Save a reusable pattern without creating shifts. Applying it later creates independent required shifts; editing or deleting the template never changes existing shifts.",14)
+        button("Add template") {editTemplate(null)}
+        if(r.templates.isEmpty()) text("No templates yet. Save a name, times, staffing count and weekdays; the post can be chosen when applying.")
+        r.templates.sortedBy {nameKey(it.name)}.forEach { t ->
+            text(t.name,18,true)
+            text("${t.label} · ${t.start}–${t.end} · ${t.required} staff\n${t.postId?.let {id -> r.posts.first {it.id==id}.name} ?: "Choose post when applying"} · ${t.zone}\n"+t.weekdays.sorted().joinToString {DayOfWeek.of(it).name},14)
+            buttons("Use ${t.name}" to {useTemplate(t)},"Edit ${t.name}" to {editTemplate(t)})
+        }
+    }
+    private fun editTemplate(t:ShiftTemplate?,duplicate:Boolean=false) {
+        if(duplicate) drafts.remove("template:new")
+        val editing=t!=null && !duplicate
+        page(if(editing) "Edit shift template" else "Add shift template","template:${if(editing) t!!.id else "new"}")
+        formActions()
+        val name=field("Template name",if(duplicate) "${t!!.name} copy" else t?.name.orEmpty())
+        val label=field("Template shift name",t?.label ?: "Night")
+        val times=field("Template shift time",t?.let {"${it.start}-${it.end}"} ?: "6p-6a")
+        val zone=field("Template time zone",t?.zone ?: prefs.getString("zone",ZoneId.systemDefault().id).orEmpty())
+        val count=field("Template required personnel",(t?.required ?: 1).toString(),type=InputType.TYPE_CLASS_NUMBER)
+        val post=spinner("Template default post",listOf("Choose when applying")+r.posts.map {it.name})
+        if(drafts[screen]?.get("Template default post")==null) post.setSelection(r.posts.indexOfFirst {it.id==t?.postId}+1)
+        val weekdays=DayOfWeek.values().map {it to check("Template "+it.name.lowercase(Locale.US).replaceFirstChar(Char::uppercase),it.value in (t?.weekdays ?: (1..7).toSet()))}
+        val notes=field("Template notes",t?.notes.orEmpty(),true)
+        button("Save template") {
+            val time=ScheduleEntry.timeRange(times.text.toString())
+            val updated=ShiftTemplate(if(editing) t!!.id else UUID.randomUUID().toString(),name.text.toString().trim(),label.text.toString().trim(),time.first.toString(),time.second.toString(),zone.text.toString().trim(),count.text.toString().toInt(),r.posts.getOrNull(post.selectedItemPosition-1)?.id,weekdays.filter {it.second.isChecked}.map {it.first.value}.toSet(),notes.text.toString())
+            save(ShiftTemplates.put(r,updated),after={templates()})
+        }
+        if(editing) {
+            button("Duplicate template") {editTemplate(t,true)}
+            button("Delete template") {ask("Delete template?","Delete ${t!!.name}? Existing shifts and assignments are kept unchanged.","Delete") {save(ShiftTemplates.remove(r,t.id),after={templates()})}}
+        }
+    }
+    private fun useTemplate(t:ShiftTemplate) {
+        page("Apply template: ${t.name}","template-use:${t.id}");formActions()
+        if(r.posts.isEmpty()) {text("Add a post before applying a template.");button("Add post") {editPost(null)};return}
+        text("${t.label} · ${t.start}–${t.end} · ${t.required} staff · ${t.zone}\nDays: "+t.weekdays.sorted().joinToString {DayOfWeek.of(it).name},14)
+        val post=spinner("Post for generated shifts",r.posts.map {it.name})
+        if(drafts[screen]?.get("Post for generated shifts")==null) post.setSelection(r.posts.indexOfFirst {it.id==t.postId}.coerceAtLeast(0))
+        val dates=field("Template dates","${month.atDay(1)}..${month.atEndOfMonth()}")
+        val year=field("Template year",month.year.toString(),type=InputType.TYPE_CLASS_NUMBER)
+        button("Review template shifts") {
+            val proposal=ShiftTemplates.apply(r,t.id,ScheduleEntry.dates(dates.text.toString(),year.text.toString().toInt()),r.posts[post.selectedItemPosition].id)
+            require(proposal.added.isNotEmpty()) {"All ${proposal.skipped} requirements already exist. Existing staffing and assignments are unchanged."}
+            review(proposal.roster,proposal.added,"Template ${t.name}: ${proposal.added.size} new requirements; ${proposal.skipped} existing requirements skipped. No personnel assigned automatically. Existing shifts will not change.")
+        }
     }
     private fun required() {
         page("Create required shifts","required");formActions()
         if(r.posts.isEmpty()) {button("Add a post first") {editPost(null)};return}
+        button("Saved templates") {templates()}
         text("Create the work that must be covered, even when no one is assigned. Repeating patterns are generated for the selected date range.")
         val post=spinner("Post",r.posts.map {it.name})
         val label=field("Shift name","Night")
@@ -386,9 +448,9 @@ class ShiftActivity : Activity() {
         val person=spinner("Personnel",listOf("All personnel")+r.people.map {it.name});val post=spinner("Post",listOf("All posts")+r.posts.map {it.name});val grouping=spinner("Group printable text by",listOf("Date","Post","Person"))
         val gaps=check("Only uncovered / partially filled shifts",false)
         val stamp=check("Include generated-at timestamp",false)
-        fun selection():Pair<List<Shift>,Person?> {
+        fun selection(includePerson:Boolean=true):Pair<List<Shift>,Person?> {
             val first=LocalDate.parse(from.text.toString().trim());val last=LocalDate.parse(through.text.toString().trim());require(!last.isBefore(first)) {"End date is before start date."}
-            val p=r.people.getOrNull(person.selectedItemPosition-1);val location=r.posts.getOrNull(post.selectedItemPosition-1)
+            val p=if(includePerson) r.people.getOrNull(person.selectedItemPosition-1) else null;val location=r.posts.getOrNull(post.selectedItemPosition-1)
             val selected=r.shifts.filter {s -> val date=s.startTime().toLocalDate();!date.isBefore(first)&&!date.isAfter(last)&&(location==null||s.postId==location.id)&&(p==null||r.assignments.any {it.shiftId==s.id&&it.personId==p.id})&&(!gaps.isChecked||r.open(s)>0)}
             require(selected.isNotEmpty()) {"No shifts match the selection."};return selected to p
         }
@@ -400,6 +462,21 @@ class ShiftActivity : Activity() {
         button("Send individual SMS automatically (opt-in)") {
             val(s,p)=selection();SmsSharing.direct(this,r,s,p)
         }
+        text("Choose a combination of people for SMS",18,true)
+        text("This picker uses the dates, post and uncovered filter above, independently of the single-person text-export filter. Each selected person receives only their own shifts.",14)
+        val chosen=prefs.getStringSet("sms-selected-ids",emptySet()).orEmpty().toMutableSet()
+        val selectedText=text("")
+        fun showRecipients() {selectedText.text="Selected for SMS: "+r.people.filter {it.id in chosen}.joinToString {it.name}.ifBlank {"None — choose people"}}
+        showRecipients()
+        button("Choose people for SMS") {SmsRecipientPicker.show(this,r.people,chosen) {ids ->chosen.clear();chosen.addAll(ids);prefs.edit().putStringSet("sms-selected-ids",ids.toSet()).apply();showRecipients()}}
+        fun selectedMessages():List<PersonalSms> = SmsBatch.prepare(r,selection(false).first,chosen.toSet())
+        button("Review selected people's SMS") {message("Nothing sent. Each recipient gets only their own assignments.\n\n"+SmsBatch.review(selectedMessages()))}
+        button("Copy selected SMS text") {copyText(SmsBatch.review(selectedMessages()))}
+        button("Prepare SMS one by one") {
+            val messages=selectedMessages()
+            AlertDialog.Builder(this).setTitle("Choose whose SMS to open").setItems(messages.map {it.name}.toTypedArray()) {_,index ->guard {val m=messages[index];SmsSharing.compose(this,m.text,SmsBatch.number(m))}}.setNegativeButton("Cancel",null).show()
+        }
+        button("Send selected automatically (opt-in)") {val shifts=selection(false).first;SmsBatch.prepare(r,shifts,chosen.toSet());SmsSharing.direct(this,r,shifts,null,chosen.toSet())}
         text("SMS needs a messaging-capable phone/SIM and carrier service. A Wi-Fi-only tablet can still copy or export the schedule for transfer to a phone. No SMS is sent just by editing a schedule.",14)
     }
     private fun copyText(text:String) {(getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Shift Calendar",text));Toast.makeText(this,"Copied",Toast.LENGTH_SHORT).show()}
@@ -422,7 +499,7 @@ class ShiftActivity : Activity() {
             background({contentResolver.openInputStream(uri).use {ScheduleBackup.readBounded(requireNotNull(it))}}) {bytes -> password("Restore backup password") {pass ->
                 background({try {ScheduleBackup.decrypt(bytes,pass)} finally {pass.fill('\u0000');bytes.fill(0)}}) {next ->
                     val revision=current.revision
-                    ask("Replace local schedule?","Backup contains ${next.people.size} people, ${next.posts.size} posts and ${next.shifts.size} required shifts. This replaces the current schedule. Make your own backup first. The replacement is validated and atomic.","Restore") {save(next,revision)}
+                    ask("Replace local schedule?","Backup contains ${next.people.size} people, ${next.posts.size} posts and ${next.shifts.size} required shifts and ${next.templates.size} templates. This replaces the current schedule. Make your own backup first. The replacement is validated and atomic.","Restore") {save(next,revision)}
                 }
             }}
         }
@@ -445,7 +522,7 @@ class ShiftActivity : Activity() {
         text("Handwriting uses the installed Samsung/Android keyboard. No recognizer or language model is downloaded by this app. On older devices, choose handwriting in Samsung Keyboard. Keyboard entry always remains available. Verify handwriting with Internet disabled on each device.",14)
         buttons("Encrypted backup" to {val snapshot=r;password("New backup password (10+ characters)") {pass ->background({try {ScheduleBackup.encrypt(snapshot,pass)} finally {pass.fill('\u0000')}}) {bytes ->createDocument(bytes,"Shift-Calendar-${LocalDate.now()}.scbackup","application/octet-stream")}}},"Restore backup" to {startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {addCategory(Intent.CATEGORY_OPENABLE);type="*/*";putExtra(Intent.EXTRA_LOCAL_ONLY,true)},411)})
         button("Add home-screen shortcut") {if(android.os.Build.VERSION.SDK_INT>=26) {val manager=getSystemService(android.content.pm.ShortcutManager::class.java);if(manager.isRequestPinShortcutSupported) {val shortcut=android.content.pm.ShortcutInfo.Builder(this,"shift-calendar").setShortLabel("Shift Calendar").setIcon(android.graphics.drawable.Icon.createWithResource(this,applicationInfo.icon)).setIntent(Intent(this,ShiftActivity::class.java).setAction(Intent.ACTION_MAIN)).build();manager.requestPinShortcut(shortcut,null)} else message("Your launcher does not support pinning. Long-press Shift Calendar in the app drawer and add it to Home.")}}
-        button("Quick start / functions") {message("1. Add Personnel and Posts.\n2. Create Required shifts for dates, weekdays, time, post and staffing count.\n3. Assign several people on each shift, or use Enter schedules for successive personnel blocks.\n4. Review before saving. Duplicate assignments are skipped; overlaps are rejected.\n5. Uncovered shows required shifts with missing personnel.\n6. Share / TXT selects dates and people for SMS, copy, or a printable text file.\n7. Make encrypted backups and keep the password safe.\n\nShifts belong to their start dates. A 6 PM–6 AM shift ends the following morning. Recurring requirements are generated for the chosen range, not forever. Copy a week or reuse a pattern to extend coverage.\n\nA composer handoff is not proof of sending or delivery. Automatic SMS sends only after opt-in, permission and a final recipient/segment review.")}
+        button("Quick start / functions") {message("1. Add Personnel and Posts.\n2. Create Required shifts for dates, weekdays, time, post and staffing count.\n3. Assign several people on each shift, or use Enter schedules for successive personnel blocks.\n4. Review before saving. Duplicate assignments are skipped; overlaps are rejected.\n5. Uncovered shows required shifts with missing personnel.\n6. Templates saves independent patterns; Use selects dates/post and previews requirements. Edits never change earlier shifts.\n7. Schedule > Filters / search selects sorting and direction.\n8. Share / TXT > Choose people for SMS selects any combination; review, copy, open each composer or confirm opt-in direct SMS. TXT remains available for Word.\n9. Make encrypted backups and keep the password safe.\n\nShifts belong to their start dates. A 6 PM–6 AM shift ends the following morning. Recurring requirements are generated for the chosen range, not forever. Copy a week or reuse a pattern to extend coverage.\n\nA composer handoff is not proof of sending or delivery. Automatic SMS sends only after opt-in, permission and a final recipient/segment review.")}
         button("License / source information") {message("Shift Calendar is an independent customization of Fossify Calendar, GNU GPL version 3. Original copyright notices and license are retained. No warranty. The corresponding source and build scripts are in antonioavila-bit/Calendar, security/offline-shifts-v1. See LICENSE and docs/THIRD_PARTY_NOTICES.md in the source archive. The handwriting adapter follows the owner's read/copy-only Inventory-App pattern. This build is a hardware-test preview, not a production-accepted release.")}
         text("Last direct-SMS status: "+prefs.getString("sms-status","No direct SMS submitted."),14)
     }
