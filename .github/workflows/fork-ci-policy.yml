@@ -1,0 +1,23 @@
+name: Fork CI policy
+
+on:
+  push:
+    branches: [main, "maintenance/**", "security/**"]
+    paths: [".github/workflows/**", "scripts/check_fork_workflows.py"]
+  pull_request:
+    paths: [".github/workflows/**", "scripts/check_fork_workflows.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fork-workflow-boundary:
+    if: github.repository == 'antonioavila-bit/Calendar'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 scripts/check_fork_workflows.py
