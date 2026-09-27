@@ -1,36 +1,50 @@
 SHIFT CALENDAR — ANDROID HARDWARE-TEST PREVIEW
-Version: 0.1.0-preview01
+Version: 0.1.0-preview02
 
-This is the customized scheduling APK, not the original Fossify Calendar.
-The APK is Android debug-signed for testing. It is not a production release.
-Do not install an unsigned APK or the separate androidTest APK.
+This is the customized scheduling APK, not original Fossify Calendar.
+It is debug-signed for testing, not a production release. Do not install an unsigned or androidTest APK.
 
-INSTALL
-1. Download the Shift-Calendar-preview-APK artifact from the successful Offline Calendar APK workflow in antonioavila-bit/Calendar.
-2. Extract the ZIP on your Windows PC. Use Shift-Calendar-0.1.0-preview01.apk.
-3. Transfer the APK by USB to the Galaxy S25 or Tab S7. The Android device does not need Internet.
-4. Open the APK in My Files and allow installation from that source when Android prompts. Turn that allowance off again afterwards.
-5. Open Shift Calendar using the navy seahorse/calendar/clock icon in the app drawer. Add it to the home screen by long-pressing, or use Settings > Add home-screen shortcut and approve the launcher prompt.
+INSTALL / UPDATE SAFELY
+1. Before replacing any installed preview, make an encrypted backup and keep its password. Debug signing can change between builds; Android may reject an in-place update. Never uninstall a data-bearing app without a safe, restorable backup.
+2. Download Shift-Calendar-preview-APK from a fully successful Offline Calendar APK run in antonioavila-bit/Calendar. Both emulator jobs must pass, not only compilation.
+3. Extract the ZIP. Transfer Shift-Calendar-0.1.0-preview02.apk by USB to the Galaxy S25 or Tab S7; the Android device does not need Internet.
+4. Open in My Files and follow Android's installation prompt. Turn the temporary install-source allowance off afterwards.
+5. Open the navy seahorse Shift Calendar icon. Long-press in the app drawer to add to Home, or use Menu > Settings / backup > Add home-screen shortcut and approve the launcher prompt.
 
-FIRST USE
-1. Add Personnel and Posts. Phone numbers are optional unless sending SMS.
-2. Create Required shifts, including date range, weekdays, post, shift time and number of personnel required. This is what enables gap detection.
-3. Assign personnel on a shift, or enter successive four-line blocks under Enter schedules: name / dates / time / post. Names and posts must match saved records. Choose the year and review before saving. The optional create-missing-requirements box is off by default.
-4. Use Schedule and Uncovered to view assignments and open positions. Shift dates refer to START dates. Overnight end dates are explicit.
-5. Use Share / TXT for a date range, person, post and grouping. Save .txt for Windows, Copy for Word, manual SMS, prepared individual SMS, or Share. Direct SMS requires Settings opt-in, a capable phone/SIM, permission, and a final review before sending. It is not a background schedule-change broadcast.
-6. Settings offers encrypted backup/restore. Keep the password safe; it cannot be recovered.
+EXACT README FAST-ENTRY TEST
+1. Add personnel Mark, Bill and Tate and post Hotel. Names/posts must match saved records.
+2. Create Hotel required shifts for Oct 1-31 2026, 6 PM-6 AM, all weekdays, required personnel 1. This tells the app which nights need coverage.
+3. Open Menu > Enter schedules. Select year 2026 and the intended time zone, e.g. America/New_York. Enable 'Also create any missing required shifts' for the September/November dates in this example (or create those requirements first).
+4. Paste or type these blocks in any order. Leading README bullet markers are also accepted:
 
-OFFLINE TABLET AND HANDWRITING
-All scheduling and file generation are local. Wi-Fi-only tablets cannot send carrier SMS. Export/copy the text and transfer it to a messaging-capable phone.
-Handwriting uses the installed keyboard/input method. On the Tab S7, choose Samsung Keyboard handwriting with your S Pen; on supported newer Android devices, write into a native text field. No model is downloaded by this APK. Verify the installed keyboard's offline capability with Internet disabled. Keyboard entry remains available.
+Mark
+Oct 14-25
+6 PM-6 AM
+Hotel
 
-TEST STATUS
-CI build, actual APK checks, and emulator tests are recorded separately in the workflow. A completed build job alone does not mean device tests passed.
-Galaxy S25 and Tab S7 physical-device acceptance is still required. Test portrait/landscape, keyboard open/hidden, stylus input, saved schedule persistence, the home-screen icon, TXT export to Windows, backups and restore, reminders, and SMS on a capable phone. Never test SMS against unintended recipients.
-This preview uses a dedicated shift workspace. The inherited personal calendar, widgets, ICS import/export and personal-event sync are not exposed in this preview. Required-shift patterns are generated for finite date ranges; reuse/copy them to extend schedules.
+Bill
+Oct 26-Nov 8
+6 PM-6 AM
+Hotel
 
-BACKUP BEFORE UPDATING
-Preview builds may have different debug signing certificates; Android can reject an in-place update. Make an encrypted backup first. Do not uninstall an existing data-bearing app unless that backup is safe and restorable. Stable production signing is a separate release gate.
+Tate
+Sep 30, Oct 1, Oct 2
+6 PM-6 AM
+Hotel
 
-SOURCE AND CHECKSUMS
-The artifact includes the exact source ZIP, commit.txt, SHA256SUMS.txt, APK identity/permissions/signature reports and this guide. The source retains GPLv3 licensing and third-party notices.
+5. Tap Review and sort schedules. Check Mark 12, Bill 14, Tate 3: 29 new assignments. Review includes each person, original date/range, normalized dates, shift time, post, counts, conflicts and missing/ambiguous fields. Overnight endings are explicit. Nothing has been saved yet.
+6. Cancel once and check no assignments were saved; reopen review and Save all. Any invalid batch shows BLOCKED and no Save all button; correct all issues first.
+7. Open Uncovered. For October with only this example data, Hotel nights Oct 3-13 remain unfilled (11 shifts, 11 open positions). Other real assignments would change this result.
+8. Re-entering the same data must add no duplicate assignments.
+
+FILTERS AND PRINTABLE EXPORT
+Menu > Schedule > Filters / search includes from/through start dates, personnel, post, shift/time, coverage and search. Apply filters. Saved conflicts are normally absent because overlapping assignments are blocked.
+Menu > Share / TXT includes date/person/post selection and printable grouping. Save .txt locally or Copy for Word. Transfer by USB to Windows 11, open in Notepad, select/copy and paste into Word to print. This actual transfer/printing path still needs device acceptance.
+
+SMS / TABLET / HANDWRITING
+Manual SMS opens the installed Messages composer for your review and sending. Direct SMS is off by default, requires opt-in/permission/carrier hardware/default SIM and final recipient review. It never automatically broadcasts schedule changes. Test only intended recipients. A Wi-Fi-only tablet cannot send carrier SMS: export/copy and transfer to a messaging-capable phone.
+Handwriting uses the installed Samsung/Android keyboard, not a bundled recognizer. On Tab S7 use the Samsung Keyboard handwriting mode with S Pen; supported newer devices also offer native stylus input. Verify airplane-mode handwriting on each actual device. Typing remains available.
+
+ACCEPTANCE LIMITS
+This remains a preview. Actual S25/Tab S7, S Pen/keyboard offline behavior, portrait/landscape/large-font layouts, local picker/USB/Word, carrier SMS, reminder/reboot/permission denial, scale and protected stable signing remain gates. See README_CONFORMANCE_AUDIT.md for other unfinished requirements, including independent template management, multi-person subset SMS selection and selectable board sorting.
+Backups are encrypted; their password cannot be recovered. Source/build scripts, commit, checksum file and actual APK reports accompany the CI artifact. Original GPLv3 and third-party notices remain included.

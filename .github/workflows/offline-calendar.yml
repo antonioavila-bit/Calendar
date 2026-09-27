@@ -48,12 +48,12 @@ jobs:
             echo 'Unexpected network/calendar/contact/storage permission in installed APK'; exit 1
           fi
           python3 scripts/check_preview_artifact.py "$APK"
-          cp "$APK" deliverables/Shift-Calendar-0.1.0-preview01.apk
+          cp "$APK" deliverables/Shift-Calendar-0.1.0-preview02.apk
           git rev-parse HEAD > deliverables/commit.txt
           git archive --format=zip --output=deliverables/shift-calendar-source.zip HEAD
           cp docs/INSTALL_PREVIEW.md deliverables/INSTALL_PREVIEW.txt
           cd deliverables
-          sha256sum Shift-Calendar-0.1.0-preview01.apk shift-calendar-source.zip > SHA256SUMS.txt
+          sha256sum Shift-Calendar-0.1.0-preview02.apk shift-calendar-source.zip > SHA256SUMS.txt
       - name: Save signed preview, source and verification evidence
         uses: actions/upload-artifact@v4
         with:

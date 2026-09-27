@@ -19,6 +19,6 @@ RESULT=${PIPESTATUS[0]}
 set -e
 adb logcat -d > device-evidence/logcat.txt
 adb pull /sdcard/Android/data/com.antonioavila.offlinesecuritycalendar.debug/files/ device-evidence/screens/ || true
-if [ "$RESULT" != '0' ] || ! grep -q 'OK (12 tests)' device-evidence/instrumentation.txt; then
+if [ "$RESULT" != '0' ] || ! grep -q 'OK (16 tests)' device-evidence/instrumentation.txt; then
   echo 'Instrumented acceptance failed; APK is not qualified by this job.'; exit 1
 fi

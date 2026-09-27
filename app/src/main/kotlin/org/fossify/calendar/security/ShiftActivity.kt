@@ -127,8 +127,8 @@ class ShiftActivity : Activity() {
             pair.forEach { (label,action) -> button(label,row,action).layoutParams=LinearLayout.LayoutParams(0,-2,1f) }
         }
     }
-    private fun field(label:String,value:String="",multi:Boolean=false,type:Int=InputType.TYPE_CLASS_TEXT):EditText {
-        text(label,14,true)
+    private fun field(label:String,value:String="",multi:Boolean=false,type:Int=InputType.TYPE_CLASS_TEXT,parent:LinearLayout=body):EditText {
+        text(label,14,true,parent)
         val e=EditText(this).apply {
             id=View.generateViewId();setText(drafts[screen]?.get(label)?:value);hint=label;textSize=17f
             inputType=type or (if(multi) InputType.TYPE_TEXT_FLAG_MULTI_LINE else 0)
@@ -137,7 +137,7 @@ class ShiftActivity : Activity() {
             setPadding(dp(10),dp(10),dp(10),dp(10));setTextColor(Color.BLACK)
             HandwritingInput.attach(this) { prefs.getBoolean("handwriting",true) }
         }
-        body.addView(e,LinearLayout.LayoutParams(-1,-2));controls[label]={e.text.toString()};return e
+        parent.addView(e,LinearLayout.LayoutParams(-1,-2));controls[label]={e.text.toString()};return e
     }
     private fun spinner(label:String,values:List<String>,parent:LinearLayout=body):Spinner {
         text(label,14,true,parent)
@@ -181,9 +181,9 @@ class ShiftActivity : Activity() {
         ask("Review before saving",description+"\n\n"+ScheduleText.format(next,affected),"Save all") { save(next,revision) }
     }
     private fun monthShifts() = r.shifts.filter { YearMonth.from(it.startTime())==month }
-    private fun summary(shifts:List<Shift>) {
-        if(shifts.isEmpty()) text("No required shifts in this selection. Add requirements first; a blank calendar does not prove coverage.")
-        else text("${shifts.size} shifts · ${shifts.count { r.open(it)>0 }} uncovered · ${shifts.sumOf { r.open(it) }} open",15,true)
+    private fun summary(shifts:List<Shift>,parent:LinearLayout=body) {
+        if(shifts.isEmpty()) text("No required shifts in this selection. Add requirements first; a blank calendar does not prove coverage.",parent=parent)
+        else text("${shifts.size} shifts · ${shifts.count { r.open(it)>0 }} uncovered · ${shifts.sumOf { r.open(it) }} open",15,true,parent)
     }
     private fun calendar() {
         page(month.format(DateTimeFormatter.ofPattern("MMMM uuuu",Locale.US)),"calendar")
@@ -218,29 +218,37 @@ class ShiftActivity : Activity() {
         if(day==null) text("Choose a date, or open Schedule to view this month's full roster.")
     }
     private fun board(uncovered:Boolean=false) {
-        page(if(uncovered) "Uncovered shifts — $month" else "Schedule — $month",if(uncovered) "uncovered" else "board")
-        buttons("Previous month" to {month=month.minusMonths(1);board(uncovered)},"Next month" to {month=month.plusMonths(1);board(uncovered)},"Required shifts" to {required()},"Enter schedules" to {bulk()})
-        val all=monthShifts().sortedWith(compareBy<Shift>{it.startTime().toInstant()}.thenBy{it.postId})
-        summary(all)
+        val tag=if(uncovered) "uncovered" else "board"
+        page(if(uncovered) "Uncovered shifts — $month" else "Schedule — $month",tag)
+        fun moveMonth(offset:Long) {controls.clear();drafts.remove(tag);month=month.plusMonths(offset);board(uncovered)}
+        buttons("Previous month" to {moveMonth(-1)},"Next month" to {moveMonth(1)},"Required shifts" to {required()},"Enter schedules" to {bulk()})
         val filters=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;visibility=View.GONE}
-        button("Filter by person / post") {filters.visibility=if(filters.visibility==View.VISIBLE) View.GONE else View.VISIBLE}
+        button("Filters / search") {filters.visibility=if(filters.visibility==View.VISIBLE) View.GONE else View.VISIBLE}
         body.addView(filters)
-        val person=spinner("Filter person",listOf("All personnel")+r.people.map { it.name },filters)
-        val post=spinner("Filter post",listOf("All posts")+r.posts.map { it.name },filters)
-        val filterStatus=text("",14)
-        filterStatus.visibility=View.GONE
+        val from=field("From start date (YYYY-MM-DD)",month.atDay(1).toString(),parent=filters)
+        val through=field("Through start date (YYYY-MM-DD)",month.atEndOfMonth().toString(),parent=filters)
+        val person=spinner("Filter person",listOf("All personnel")+r.people.map {it.name},filters)
+        val post=spinner("Filter post",listOf("All posts")+r.posts.map {it.name},filters)
+        val patterns=r.shifts.map(ScheduleFilters::pattern).distinct().sorted()
+        val pattern=spinner("Shift / time",listOf("All shifts")+patterns,filters)
+        val status=spinner("Coverage status",listOf("All statuses","UNFILLED","PARTIALLY FILLED","FILLED","OVERSTAFFED","CONFLICTS"),filters)
+        val search=field("Search names, posts, shifts or notes",parent=filters)
         val list=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL};body.addView(list)
         fun show() {
+            val selectedStatus=status.selectedItem.toString()
+            val filtered=ScheduleFilters.select(r,LocalDate.parse(from.text.toString().trim()),LocalDate.parse(through.text.toString().trim()),
+                r.people.getOrNull(person.selectedItemPosition-1)?.id,r.posts.getOrNull(post.selectedItemPosition-1)?.id,
+                patterns.getOrNull(pattern.selectedItemPosition-1),selectedStatus.takeUnless {it=="All statuses"||it=="CONFLICTS"},
+                uncovered,selectedStatus=="CONFLICTS",search.text.toString())
             list.removeAllViews()
-            val p=r.people.getOrNull(person.selectedItemPosition-1)?.id;val location=r.posts.getOrNull(post.selectedItemPosition-1)?.id
-            filterStatus.text=listOfNotNull(p?.let {id->r.people.first {it.id==id}.name},location?.let {id->r.posts.first {it.id==id}.name}).joinToString(" · ")
-            filterStatus.visibility=if(p==null&&location==null) View.GONE else View.VISIBLE
-            val filtered=all.filter { s -> (!uncovered || r.open(s)>0) && (location==null || s.postId==location) && (p==null || r.assignments.any { it.shiftId==s.id && it.personId==p }) }
-            if(filtered.isEmpty()) text("No shifts match these filters.",parent=list)
-            filtered.forEach { shiftCard(it,list) }
+            text("${from.text} through ${through.text}",14,parent=list)
+            summary(filtered,list)
+            if(selectedStatus=="CONFLICTS") text("Conflicting assignments are blocked before saving. This filter checks for overlaps in saved assignments.",14,parent=list)
+            filtered.forEach {shiftCard(it,list)}
         }
-        val listener=object:AdapterView.OnItemSelectedListener {override fun onNothingSelected(parent:AdapterView<*>?) {} ;override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long){show()} }
-        person.onItemSelectedListener=listener;post.onItemSelectedListener=listener;show()
+        button("Apply filters",filters) {show();keyboard();filters.visibility=View.GONE}
+        val listener=object:AdapterView.OnItemSelectedListener {override fun onNothingSelected(parent:AdapterView<*>?) {};override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long){guard {show()}}}
+        listOf(person,post,pattern,status).forEach {it.onItemSelectedListener=listener};guard {show()}
         button("Copy a date range / week") {copyRange()}
     }
     private fun shiftCard(s:Shift,parent:LinearLayout=body) {
@@ -334,7 +342,7 @@ class ShiftActivity : Activity() {
     private fun bulk() {
         page("Personnel-first schedule entry","bulk");formActions()
         if(r.people.isEmpty()||r.posts.isEmpty()) {text("Add personnel and posts first, then return here. Names must match those saved records.");return}
-        text("Enter four lines per person: name, dates, time, post. Repeat in any order. Or use one line per schedule: Name | Dates | 6p-6a | Post. Nothing is saved before review.")
+        text("Enter four lines per person: name, dates, time, post. Repeat in any order. Bullets copied from the README are accepted. Or use Name | Dates | 6p-6a | Post. Nothing is saved before review.")
         val year=field("Year for dates without a year",month.year.toString(),type=InputType.TYPE_CLASS_NUMBER)
         val zone=field("Time zone",prefs.getString("zone",ZoneId.systemDefault().id).orEmpty())
         val entries=field("Schedule entries","",true)
@@ -342,12 +350,20 @@ class ShiftActivity : Activity() {
         val create=check("Also create any missing required shifts",false)
         val needed=field("Required personnel for new shifts only","1",type=InputType.TYPE_CLASS_NUMBER)
         button("Review and sort schedules") {
-            val next=ScheduleEntry.bulk(r,entries.text.toString(),year.text.toString().toInt(),zone.text.toString().trim(),create.isChecked,needed.text.toString().toInt())
-            val affected=next.shifts.filter {s -> s !in r.shifts || next.assignments.filter {it.shiftId==s.id}.toSet()!=r.assignments.filter {it.shiftId==s.id}.toSet()}
-            require(affected.isNotEmpty()) {"These assignments already exist. No duplicates were added."}
-            review(next,affected,"${affected.size} shifts changed. ${next.shifts.size-r.shifts.size} new requirements; ${next.assignments.size-r.assignments.size} new assignments. Check the displayed years, overnight end dates, posts and staffing counts.")
+            keyboard()
+            val snapshot=current
+            val input=entries.text.toString();val selectedYear=year.text.toString().toIntOrNull()
+            val selectedZone=zone.text.toString().trim();val createMissing=create.isChecked
+            val staffing=needed.text.toString().toIntOrNull()
+            background({BulkScheduleReview.prepare(snapshot.roster,input,selectedYear,selectedZone,createMissing,staffing)}) { result ->
+                val canSave=result.canSave && result.affected.isNotEmpty()
+                ask("Review before saving",result.render(),if(canSave) "Save all" else "Back to entry") {
+                    if(canSave) save(result.requireValid(),snapshot.revision)
+                }
+            }
         }
     }
+
     private fun copyRange() {
         page("Copy day / week / range","copy");formActions()
         val dates=field("Dates to copy", "${month.atDay(1)}..${month.atDay(minOf(7,month.lengthOfMonth()))}")

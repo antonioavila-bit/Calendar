@@ -133,42 +133,7 @@ object ScheduleEntry {
     }
     // Strict, reviewable grammar. No remote AI, fuzzy person matching, or silent field guessing.
     fun bulk(roster: Roster, text: String, year: Int, zone: String, createMissing: Boolean, required: Int): Roster {
-        require(text.length <= 64000) { "Bulk entry is too long." }
-        val nonempty = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
-        require(nonempty.isNotEmpty()) { "Enter a schedule." }
-        val rows = if (nonempty.any { '|' in it }) {
-            require(nonempty.all { '|' in it }) { "Use four pipe-separated columns on every line, or four lines per person." }
-            nonempty.map { it.split('|').map(String::trim) }
-        } else {
-            require(nonempty.size % 4 == 0) { "Each person needs four lines: name, dates, shift time, post." }
-            nonempty.chunked(4)
-        }
-        var next = roster
-        rows.forEachIndexed { i, row ->
-            try {
-                require(row.size == 4) { "Use: Name | Dates | 6p-6a | Post" }
-                val person = roster.people.singleOrNull { nameKey(it.name) == nameKey(row[0]) }
-                    ?: throw IllegalArgumentException("Add or select the exact personnel name: ${row[0]}")
-                val post = roster.posts.singleOrNull { nameKey(it.name) == nameKey(row[3]) }
-                    ?: throw IllegalArgumentException("Add or select the exact post: ${row[3]}")
-                val times = timeRange(row[2])
-                dates(row[1], year).forEach { day ->
-                    val candidate = shift(day, post.id, "Shift", times.first, times.second, zone, required)
-                    var current = next.shifts.firstOrNull { it.key() == candidate.key() }
-                    if (current == null) {
-                        require(createMissing) { "No required shift for ${post.name} on $day at ${row[2]}. Create the requirement first, or explicitly enable creation below." }
-                        current = candidate
-                        next = next.copy(shifts = next.shifts + current)
-                    }
-                    val assignment = Assignment(current.id, person.id)
-                    if (assignment !in next.assignments) next = next.copy(assignments = next.assignments + assignment)
-                }
-                next.validate()
-            } catch (e: Exception) {
-                throw IllegalArgumentException("Entry ${i + 1}: ${e.message ?: "Invalid schedule"}", e)
-            }
-        }
-        return next.validate()
+        return BulkScheduleReview.prepare(roster, text, year, zone, createMissing, required).requireValid()
     }
 }
 
