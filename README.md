@@ -1,59 +1,32 @@
-# Fossify Calendar
-<img alt="Logo" src="graphics/icon.webp" width="120" />
+# Shift Calendar — Offline Security Calendar
 
-<a href='https://play.google.com/store/apps/details?id=org.fossify.calendar'><img alt='Get it on Google Play' src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png' height=80/></a> <a href="https://f-droid.org/packages/org.fossify.calendar/"><img src="https://fdroid.gitlab.io/artwork/badge/get-it-on-en.svg" alt="Get it on F-Droid" height=80/></a> <a href="https://apt.izzysoft.de/fdroid/index/apk/org.fossify.calendar"><img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroid.png" alt="Get it on IzzyOnDroid" height=80/></a>
+![Approved navy seahorse calendar icon](app/src/main/res/drawable-nodpi/shift_brand.webp)
 
-Your Private & Powerful Schedule Planner
+An independent GPLv3 customization of Fossify Calendar for offline Android personnel/post scheduling. The active application branch is **security/offline-shifts-v1**, draft PR #1. The APK is a **hardware-test preview**, not yet a production-accepted release.
 
-Tired of cluttered calendars and privacy concerns?
+## Main workflow
+Add Personnel and Posts, create the required shifts and staffing counts, then assign personnel directly or enter successive person/date/time/post blocks. Review before saving. The calendar and schedule board automatically place assignments, flag conflicts and show unfilled or partly filled shifts. A blank calendar is not proof of coverage: requirements must be entered first.
 
-Fossify Calendar is here to change that. Your open-source powerhouse for managing life, designed with privacy as its core and packed with powerful features to keep you organized.
+Several people can cover the same shift, and several posts can run at the same time. Required-shift patterns support selected weekdays and finite date ranges. Existing patterns can be reused, and days/weeks/ranges can be copied. Overnight shifts belong to their START dates and display their actual end dates and time zones.
 
-Here's what makes Fossify Calendar different:
+## Offline input, sharing and backup
+- Native keyboard input and supported installed-device handwriting, adapted from the owner's expressly authorized read/copy-only Inventory-App pattern. The app does not download a recognition model or contact a cloud handwriting API.
+- Manual SMS/copy, person-specific SMS composer, confirmed opt-in direct SMS batches, and the Android share sheet. Consecutive matching shifts are compressed to readable date ranges in SMS. A Wi-Fi-only tablet can export/copy but needs a separate messaging-capable phone for carrier SMS.
+- Readable UTF-8 .txt export with Windows line endings, date/person/post filters and date/post/person grouping. Save locally, transfer to Windows 11 by USB, and open in Notepad or paste into Word to print.
+- Application-private local database with validated, revision-checked atomic changes. Password-protected encrypted backups and validated restore. Keep the password safe; it cannot be recovered.
+- Local reminders and the approved navy seahorse/calendar/clock launcher icon. Home-screen pinning requires the launcher's confirmation.
 
-**🚫 AD-FREE AND PRIVATE:**  
-Your events remain yours. No ads, no tracking, no intrusive permissions.
+## Build and installation
+Use the **Offline Calendar APK** workflow on this branch. The deliverable artifact is named **Shift-Calendar-preview-APK-<run number>**. Install only the contained `Shift-Calendar-0.1.0-preview01.apk`, not the separate instrumented-test APK.
 
-**⏰ FLEXIBLE AND CUSTOMIZABLE:**  
-Craft events precisely with times, durations, reminders, and advanced repetition rules.
+See [installation and quick-start instructions](docs/INSTALL_PREVIEW.md), [verified checkpoints and remaining gates](docs/CONTINUATION.md), and [source/artwork provenance](docs/THIRD_PARTY_NOTICES.md).
 
-**🔄 SEAMLESS SYNCING:**  
-Sync effortlessly with Google Calendar, Outlook, Nextcloud, Exchange, and more.
+The APK has its own application ID, separate from official Fossify Calendar. Android 8/API 26 or newer is the technical minimum. Galaxy S25 and Galaxy Tab S7 are required physical acceptance targets; emulator checks do not replace testing those actual devices, Samsung handwriting, SMS transport or reminders. Debug signing is for previews; stable production signing remains a release gate. Back up before changing installed builds.
 
-**🎨 PERSONALIZE YOUR PLANNER:**  
-Set custom sounds, looping audio streams, vibrations, and themes to match your preferences.
+Build/dependency downloads occur on the CI/build machine, not the offline phone/tablet. The installed app has no INTERNET or OS calendar-provider permissions and disables automatic Android app-data backup. External SMS, share, document and keyboard apps remain under their own permissions.
 
-**🌈 VIBRANT WIDGETS:**  
-Brighten your day with beautiful calendar widgets and themes for your home screen.
+## Current preview scope
+The first preview uses a dedicated normalized shift workspace. Inherited personal-calendar editors, widgets and ICS workflows are not exposed in this preview; retaining a single consistent staffing model takes precedence over editing those separate event records. Legacy source remains for future adaptation. There is no claim of complete Fossify feature parity or completed production acceptance.
 
-**📅 EFFORTLESS DAY MANAGEMENT:**  
-Plan your day with ease, whether you're a busy professional or a family organizer.
-
-**🎉 IMPORT CELEBRATIONS:**  
-Never miss a birthday or anniversary! Easily import holidays and special dates.
-
-**🔍 FILTER VIEWS:**  
-Quickly find what you're looking for with event filters.
-
-**📆 MULTIPLE VIEWS:**  
-Switch between daily, weekly, monthly, yearly, and event views effortlessly.
-
-**✨ MATERIAL DESIGN ELEGANCE:**  
-Enjoy an intuitive and user-friendly interface with dynamic themes.
-
-**Plus, Fossify Calendar is open-source!**
-
-Join the vibrant community on GitHub, contribute to the project, and make it uniquely yours.
-
-Download Fossify Calendar now and experience the power of a private and customizable schedule.
-
-➡️ Explore more Fossify apps: https://www.fossify.org<br>
-➡️ Open-Source Code: https://www.github.com/FossifyOrg<br>
-➡️ Join the community on Reddit: https://www.reddit.com/r/Fossify<br>
-➡️ Connect on Telegram: https://t.me/Fossify
-
-<div align="center">
-<img alt="App image" src="fastlane/metadata/android/en-US/images/phoneScreenshots/1_en-US.png" width="30%">
-<img alt="App image" src="fastlane/metadata/android/en-US/images/phoneScreenshots/2_en-US.png" width="30%">
-<img alt="App image" src="fastlane/metadata/android/en-US/images/phoneScreenshots/4_en-US.png" width="30%">
-</div>
+## License and repository boundaries
+The original [GNU GPLv3 license](LICENSE) and copyright notices are retained. Corresponding source and build scripts accompany the APK artifact. This is not an official Fossify release. Only this application repository and the separately authorized planning repository are writable for this project; **FossifyOrg/Calendar** and **antonioavila-bit/Inventory-App** are read/copy-only donors.

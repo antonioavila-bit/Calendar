@@ -14,5 +14,6 @@ with zipfile.ZipFile(apk) as archive:
 manifest = pathlib.Path('deliverables/apk-manifest.txt').read_text()
 assert 'android:allowBackup' in manifest and re.search(r'android:allowBackup[^\n]*=(?:false|0x0|\(type 0x12\)0x0)', manifest), 'Cloud backup not disabled in actual APK'
 assert 'org.fossify.calendar.security.ShiftActivity' in manifest
-assert 'CalDAV' not in manifest and 'CalendarPickerActivity' not in manifest
-print('PASS: approved launcher bitmap, offline launcher, and disabled automatic backup')
+for unwanted in ['CalDAV', 'CalendarPickerActivity', 'FossifyBroadcastReceiver', 'EmojiCompatInitializer', 'WorkManagerInitializer', 'WRITE_GLOBAL_SETTINGS', 'USE_FINGERPRINT']:
+    assert unwanted not in manifest, f'Unnecessary runtime component/permission: {unwanted}'
+print('PASS: approved launcher bitmap, offline launcher, disabled automatic backup and unused cross-app initialization removed')

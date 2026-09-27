@@ -14,11 +14,11 @@ adb shell settings get global airplane_mode_on | tee device-evidence/airplane-mo
 if [ "$API" = '33' ]; then adb shell wm size 1600x2560; adb shell wm density 320; fi
 adb logcat -c
 set +e
-adb shell am instrument -w -r -e class org.fossify.calendar.security.ScheduleDeviceTest com.antonioavila.offlinesecuritycalendar.debug.test/androidx.test.runner.AndroidJUnitRunner | tee device-evidence/instrumentation.txt
+adb shell am instrument -w -r -e package org.fossify.calendar.security com.antonioavila.offlinesecuritycalendar.debug.test/androidx.test.runner.AndroidJUnitRunner | tee device-evidence/instrumentation.txt
 RESULT=${PIPESTATUS[0]}
 set -e
 adb logcat -d > device-evidence/logcat.txt
-adb pull /sdcard/Android/data/com.antonioavila.offlinesecuritycalendar.debug/files/shift-calendar-screen.png device-evidence/ || true
-if [ "$RESULT" != '0' ] || ! grep -q 'OK (10 tests)' device-evidence/instrumentation.txt; then
+adb pull /sdcard/Android/data/com.antonioavila.offlinesecuritycalendar.debug/files/ device-evidence/screens/ || true
+if [ "$RESULT" != '0' ] || ! grep -q 'OK (12 tests)' device-evidence/instrumentation.txt; then
   echo 'Instrumented acceptance failed; APK is not qualified by this job.'; exit 1
 fi

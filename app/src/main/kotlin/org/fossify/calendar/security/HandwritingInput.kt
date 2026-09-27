@@ -13,8 +13,9 @@ import android.widget.EditText
 object HandwritingInput {
     fun attach(field: EditText, enabled: () -> Boolean) {
         field.imeOptions = field.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
-        if (Build.VERSION.SDK_INT >= 34) field.setAutoHandwritingEnabled(true)
+        if (Build.VERSION.SDK_INT >= 34) field.setAutoHandwritingEnabled(enabled())
         field.setOnTouchListener { view,event ->
+            if (Build.VERSION.SDK_INT >= 34) field.setAutoHandwritingEnabled(enabled())
             val pen = event.pointerCount > 0 && (event.getToolType(0)==MotionEvent.TOOL_TYPE_STYLUS || event.getToolType(0)==MotionEvent.TOOL_TYPE_ERASER)
             if (enabled() && pen) {
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
@@ -24,7 +25,6 @@ object HandwritingInput {
                         view.parent?.requestDisallowInterceptTouchEvent(true)
                         view.post { runCatching { imm.startStylusHandwriting(view) }.onFailure { imm.showSoftInput(view,InputMethodManager.SHOW_IMPLICIT) } }
                     } else {
-                        // Pre-34 Tab S7 / Samsung Keyboard path. Never disable its input connection.
                         imm.showSoftInput(view,InputMethodManager.SHOW_IMPLICIT)
                     }
                 }

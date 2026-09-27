@@ -52,7 +52,6 @@ class ScheduleStore(context: Context) : SQLiteOpenHelper(context.applicationCont
         db.beginTransaction()
         try {
             check(revision(db) == expectedRevision) { "The schedule changed after this preview. Reload and review again; nothing was overwritten." }
-            // Replace a validated snapshot atomically. A failure leaves the old snapshot intact.
             listOf("assignments","shifts","people","posts").forEach { db.delete(it,null,null) }
             fun insert(table: String, vararg fields: Pair<String,Any>) {
                 val values = ContentValues()
@@ -70,20 +69,27 @@ class ScheduleStore(context: Context) : SQLiteOpenHelper(context.applicationCont
 }
 
 object ScheduleBackup {
+    private const val MAX_FILE_BYTES = 10*1024*1024
     private val magic = "SCAL1".toByteArray(Charsets.US_ASCII)
     private fun array(values: List<JSONObject>) = JSONArray().apply { values.forEach { put(it) } }
     private fun obj(vararg values: Pair<String,Any>) = JSONObject().apply { values.forEach { put(it.first,it.second) } }
     fun encode(r: Roster): ByteArray {
         r.validate()
-        return obj("format" to "OfflineSecurityCalendar", "version" to 1,
+        val bytes = obj("format" to "OfflineSecurityCalendar", "version" to 1,
             "people" to array(r.people.map { obj("id" to it.id,"name" to it.name,"phone" to it.phone) }),
             "posts" to array(r.posts.map { obj("id" to it.id,"name" to it.name,"notes" to it.notes) }),
             "shifts" to array(r.shifts.map { obj("id" to it.id,"postId" to it.postId,"label" to it.label,"start" to it.start,"end" to it.end,"zone" to it.zone,"required" to it.required,"notes" to it.notes) }),
             "assignments" to array(r.assignments.map { obj("shiftId" to it.shiftId,"personId" to it.personId) })
         ).toString().toByteArray(Charsets.UTF_8)
+        // Header + salt + nonce + GCM tag are 49 bytes. Never create an unrestorable oversized backup.
+        if (bytes.size > MAX_FILE_BYTES-49) {
+            bytes.fill(0)
+            throw IllegalArgumentException("This preview supports backups up to 10 MB. No backup was created; your local schedule is unchanged.")
+        }
+        return bytes
     }
     fun decode(bytes: ByteArray): Roster {
-        require(bytes.size <= 10*1024*1024) { "Backup is too large." }
+        require(bytes.size <= MAX_FILE_BYTES) { "Backup is too large." }
         val root = JSONObject(bytes.toString(Charsets.UTF_8))
         require(root.getString("format") == "OfflineSecurityCalendar" && root.getInt("version") == 1) { "Unsupported backup format." }
         fun rows(key: String, limit: Int): List<JSONObject> { val a=root.getJSONArray(key); require(a.length()<=limit); return (0 until a.length()).map { a.getJSONObject(it) } }
@@ -108,7 +114,7 @@ object ScheduleBackup {
         return try { magic+salt+nonce+cipher.doFinal(plain) } finally { plain.fill(0) }
     }
     fun decrypt(bytes: ByteArray, password: CharArray): Roster {
-        require(bytes.size in 49..(10*1024*1024) && bytes.copyOfRange(0,5).contentEquals(magic)) { "Not a supported encrypted schedule backup." }
+        require(bytes.size in 49..MAX_FILE_BYTES && bytes.copyOfRange(0,5).contentEquals(magic)) { "Not a supported encrypted schedule backup." }
         val cipher=Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE,key(password,bytes.copyOfRange(5,21)),GCMParameterSpec(128,bytes.copyOfRange(21,33))); cipher.updateAAD(magic)
         val plain=try { cipher.doFinal(bytes.copyOfRange(33,bytes.size)) } catch(e: Exception) { throw IllegalArgumentException("Wrong password or damaged backup. Existing data is unchanged.",e) }
@@ -116,7 +122,7 @@ object ScheduleBackup {
     }
     fun readBounded(input: InputStream): ByteArray {
         val output=java.io.ByteArrayOutputStream(); val buffer=ByteArray(8192)
-        while(true) { val count=input.read(buffer); if(count<0) break; require(output.size()+count<=10*1024*1024) { "File exceeds 10 MB." }; output.write(buffer,0,count) }
+        while(true) { val count=input.read(buffer); if(count<0) break; require(output.size()+count<=MAX_FILE_BYTES) { "File exceeds 10 MB." }; output.write(buffer,0,count) }
         return output.toByteArray()
     }
 }

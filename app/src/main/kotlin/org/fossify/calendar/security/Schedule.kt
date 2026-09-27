@@ -176,8 +176,10 @@ object ScheduleText {
     private val date = DateTimeFormatter.ofPattern("EEE, MMM d, uuuu", Locale.US)
     private val time = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
     fun format(roster: Roster, shifts: List<Shift>, personId: String? = null, compact: Boolean = false, group: String = "Date"): String {
-        val selected = shifts.sortedWith(compareBy<Shift> { it.startTime().toInstant() }.thenBy { roster.posts.firstOrNull { p -> p.id == it.postId }?.name ?: "" })
-        val selectedPerson = personId?.let { id -> roster.people.firstOrNull { it.id == id } }
+        if (compact) return CompactScheduleText.format(roster, shifts, personId)
+        val selectedPerson = personId?.let { id -> requireNotNull(roster.people.firstOrNull { it.id == id }) { "Unknown personnel selection." } }
+        val selected = shifts.filter { s -> selectedPerson == null || roster.assignments.any { it.shiftId == s.id && it.personId == selectedPerson.id } }
+            .sortedWith(compareBy<Shift> { it.startTime().toInstant() }.thenBy { roster.posts.firstOrNull { p -> p.id == it.postId }?.name ?: "" })
         val b = StringBuilder("SHIFT CALENDAR\n")
         selectedPerson?.let { b.append(it.name).append('\n') }
         if (selected.isEmpty()) return b.append("No shifts match this selection.\n").toString()
@@ -197,7 +199,7 @@ object ScheduleText {
             else -> selected.groupBy { it.startTime().toLocalDate().format(date) }
         }
         groups.forEach { (heading, entries) ->
-            if (!compact) b.append(heading.uppercase(Locale.US)).append('\n')
+            b.append(heading.uppercase(Locale.US)).append('\n')
             entries.forEach { s ->
                 val start = s.startTime(); val end = s.endTime()
                 val post = roster.posts.first { it.id == s.postId }.name
@@ -207,7 +209,7 @@ object ScheduleText {
                 b.append(end.format(time)).append(" (").append(s.zone).append(")\n")
                 if (selectedPerson == null) b.append("Assigned: ").append(roster.assigned(s).joinToString("; ") { it.name }.ifBlank { "UNASSIGNED" }).append('\n')
                 b.append("Coverage: ").append(roster.coverage(s)).append(" (").append(roster.assigned(s).size).append('/').append(s.required).append(")\n")
-                if (!compact && s.notes.isNotBlank()) b.append("Notes: ").append(s.notes).append('\n')
+                if (s.notes.isNotBlank()) b.append("Notes: ").append(s.notes).append('\n')
                 b.append('\n')
             }
         }
