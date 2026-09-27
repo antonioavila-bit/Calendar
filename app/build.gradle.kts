@@ -24,11 +24,12 @@ fun hasSigningVars(): Boolean {
 
 base {
     val versionCode = project.property("VERSION_CODE").toString().toInt()
-    archivesName = "calendar-$versionCode"
+    archivesName = "shift-calendar-$versionCode"
 }
 
 android {
     compileSdk = project.libs.versions.app.build.compileSDKVersion.get().toInt()
+    namespace = "org.fossify.calendar"
 
     defaultConfig {
         applicationId = project.property("APP_ID").toString()
@@ -38,9 +39,7 @@ android {
         versionName = project.property("VERSION_NAME").toString()
         vectorDrawables.useSupportLibrary = true
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ksp {
-            arg("room.schemaLocation", "$projectDir/schemas")
-        }
+        ksp { arg("room.schemaLocation", "$projectDir/schemas") }
     }
 
     signingConfigs {
@@ -59,66 +58,34 @@ android {
                 storePassword = providers.environmentVariable("SIGNING_STORE_PASSWORD").get()
             }
         } else {
-            logger.warn("Warning: No signing config found. Build will be unsigned.")
+            logger.warn("No production signing configuration. Only Android debug-signed preview APKs are deliverable from this build.")
         }
     }
 
-    buildFeatures {
-        viewBinding = true
-        buildConfig = true
-    }
-
+    buildFeatures { viewBinding = true; buildConfig = true }
     buildTypes {
-        debug {
-            applicationIdSuffix = ".debug"
-        }
+        debug { applicationIdSuffix = ".debug" }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-            if (keystorePropertiesFile.exists() || hasSigningVars()) {
-                signingConfig = signingConfigs.getByName("release")
-            }
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (keystorePropertiesFile.exists() || hasSigningVars()) signingConfig = signingConfigs.getByName("release")
         }
     }
-
     flavorDimensions.add("variants")
-    productFlavors {
-        register("core")
-        register("foss")
-        register("gplay")
-    }
-
-    sourceSets {
-        getByName("main").java.directories.add("src/main/kotlin")
-    }
-
+    productFlavors { register("core"); register("foss"); register("gplay") }
+    sourceSets { getByName("main").java.directories.add("src/main/kotlin") }
     compileOptions {
         val currentJavaVersionFromLibs = JavaVersion.valueOf(libs.versions.app.build.javaVersion.get().toString())
         sourceCompatibility = currentJavaVersionFromLibs
         targetCompatibility = currentJavaVersionFromLibs
     }
-
-    dependenciesInfo {
-        includeInApk = false
-    }
-
+    dependenciesInfo { includeInApk = false }
     androidResources {
         @Suppress("UnstableApiUsage")
         generateLocaleConfig = true
     }
-
-    tasks.withType<KotlinCompile> {
-        compilerOptions.jvmTarget.set(
-            JvmTarget.fromTarget(project.libs.versions.app.build.kotlinJVMTarget.get())
-        )
-    }
-
-    namespace = project.property("APP_ID").toString()
-
+    tasks.withType<KotlinCompile> { compilerOptions.jvmTarget.set(JvmTarget.fromTarget(project.libs.versions.app.build.kotlinJVMTarget.get())) }
     lint {
         checkReleaseBuilds = false
         abortOnError = true
@@ -126,12 +93,7 @@ android {
         baseline = file("lint-baseline.xml")
         lintConfig = rootProject.file("lint.xml")
     }
-
-    bundle {
-        language {
-            enableSplit = false
-        }
-    }
+    bundle { language { enableSplit = false } }
 }
 
 detekt {
