@@ -63,7 +63,9 @@ class ScheduleDeviceTest {
     private fun all(root:View):List<View> = listOf(root)+if(root is ViewGroup) (0 until root.childCount).flatMap {all(root.getChildAt(it))} else emptyList()
     private fun waitFor(s:ActivityScenario<ShiftActivity>,label:String) {
         repeat(100) {
-            var found=false;s.onActivity {a->found=all(a.window.decorView).filterIsInstance<TextView>().any {v->v.text.toString()==label}}
+            // Wait for an actionable button, not the identically named Add person form title.
+            // The list button is recreated only after the asynchronous database save finishes.
+            var found=false;s.onActivity {a->found=all(a.window.decorView).filterIsInstance<Button>().any {v->v.isShown && v.text.toString()==label}}
             if(found) return
             SystemClock.sleep(100)
         }
