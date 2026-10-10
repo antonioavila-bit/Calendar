@@ -16,7 +16,7 @@ import javax.crypto.spec.SecretKeySpec
 
 // GPL-3.0-or-later. Normalized, application-private storage; no OS calendar provider.
 data class StoredRoster(val revision: Long, val roster: Roster)
-class ScheduleStore(context: Context) : SQLiteOpenHelper(context.applicationContext, "security-schedule.db", null, 2) {
+class ScheduleStore(context: Context) : SQLiteOpenHelper(context.applicationContext, "security-schedule.db", null, 3) {
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE metadata (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL)")
@@ -28,13 +28,52 @@ class ScheduleStore(context: Context) : SQLiteOpenHelper(context.applicationCont
         db.execSQL("CREATE INDEX assignments_person ON assignments(person_id)")
         db.execSQL("CREATE INDEX shifts_start ON shifts(start)")
         createTemplates(db)
+        createReset(db)
     }
     private fun createTemplates(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE templates (id TEXT PRIMARY KEY, name TEXT NOT NULL, label TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, zone TEXT NOT NULL, required INTEGER NOT NULL CHECK(required BETWEEN 1 AND 100), post_id TEXT REFERENCES posts(id), weekdays TEXT NOT NULL, notes TEXT NOT NULL)")
     }
+    private fun createReset(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE month_reset (id INTEGER PRIMARY KEY CHECK(id=1), month TEXT NOT NULL, revision INTEGER NOT NULL, snapshot BLOB NOT NULL)")
+    }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        check(oldVersion == 1 && newVersion == 2) { "Unsupported database upgrade $oldVersion to $newVersion. Existing data was not erased." }
-        createTemplates(db) // SQLiteOpenHelper runs this migration transactionally; no old data is deleted.
+        check(oldVersion in 1..2 && newVersion == 3) { "Unsupported database upgrade $oldVersion to $newVersion. Existing data was not erased." }
+        if(oldVersion==1) createTemplates(db)
+        createReset(db)
+    }
+    fun resetMonth(): String? = writableDatabase.rawQuery("SELECT month FROM month_reset WHERE revision=?", arrayOf(revision(writableDatabase).toString())).use { c -> if(c.moveToFirst()) c.getString(0) else null }
+    fun clearMonth(expectedRevision: Long, month: java.time.YearMonth) {
+        val db=writableDatabase
+        db.beginTransaction()
+        try {
+            val before=read()
+            check(before.revision==expectedRevision) { "The schedule changed. Reload and review the month again." }
+            val next=MonthReset.clear(before.roster,month)
+            val snapshot=ScheduleBackup.encode(before.roster)
+            try {
+                save(expectedRevision,next)
+                val values=ContentValues().apply {
+                    put("id",1);put("month",month.format(java.time.format.DateTimeFormatter.ofPattern("MMMM uuuu",java.util.Locale.US)))
+                    put("revision",expectedRevision+1);put("snapshot",snapshot)
+                }
+                db.insertOrThrow("month_reset",null,values)
+                db.setTransactionSuccessful()
+            } finally {snapshot.fill(0)}
+        } finally {db.endTransaction()}
+    }
+    fun undoClear(expectedRevision: Long) {
+        val db=writableDatabase
+        db.beginTransaction()
+        try {
+            check(revision(db)==expectedRevision) { "The schedule changed. Reload before undoing." }
+            val before=db.rawQuery("SELECT snapshot FROM month_reset WHERE revision=?",arrayOf(expectedRevision.toString())).use { c ->
+                check(c.moveToFirst()) { "Undo is no longer available because the schedule changed." }
+                val bytes=c.getBlob(0)
+                try {ScheduleBackup.decode(bytes)} finally {bytes.fill(0)}
+            }
+            save(expectedRevision,before)
+            db.setTransactionSuccessful()
+        } finally {db.endTransaction()}
     }
     private fun revision(db: SQLiteDatabase): Long = db.rawQuery("SELECT revision FROM metadata WHERE id=1", null).use { c -> check(c.moveToFirst()); c.getLong(0) }
     fun read(): StoredRoster {
@@ -60,7 +99,7 @@ class ScheduleStore(context: Context) : SQLiteOpenHelper(context.applicationCont
         db.beginTransaction()
         try {
             check(revision(db) == expectedRevision) { "The schedule changed after this preview. Reload and review again; nothing was overwritten." }
-            listOf("assignments","shifts","templates","people","posts").forEach { db.delete(it,null,null) }
+            listOf("month_reset","assignments","shifts","templates","people","posts").forEach { db.delete(it,null,null) }
             fun insert(table: String, vararg fields: Pair<String,Any?>) {
                 val values = ContentValues()
                 fields.forEach { (k,v) -> when(v) { null -> values.putNull(k); is Int -> values.put(k,v); is Long -> values.put(k,v); else -> values.put(k,v.toString()) } }

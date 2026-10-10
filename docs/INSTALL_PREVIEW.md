@@ -1,5 +1,5 @@
 SHIFT CALENDAR — ANDROID HARDWARE-TEST PREVIEW
-Version: 0.1.0-preview03
+Version: 0.1.0-preview04
 
 This is the customized scheduling APK, not original Fossify Calendar.
 It is debug-signed for testing, not a production release. Do not install an unsigned or androidTest APK.
@@ -7,14 +7,14 @@ It is debug-signed for testing, not a production release. Do not install an unsi
 INSTALL / UPDATE SAFELY
 1. Before replacing any installed preview, make an encrypted backup and keep its password. Debug signing can change between builds; Android may reject an in-place update. Never uninstall a data-bearing app without a safe, restorable backup.
 2. Download Shift-Calendar-preview-APK from a fully successful Offline Calendar APK run in antonioavila-bit/Calendar. Both emulator jobs must pass, not only compilation.
-3. Extract the ZIP. Transfer Shift-Calendar-0.1.0-preview03.apk by USB to the Galaxy S25 or Tab S7; the Android device does not need Internet.
+3. Extract the ZIP. Transfer Shift-Calendar-0.1.0-preview04.apk by USB to the Galaxy S25 or Tab S7; the Android device does not need Internet.
 4. Open in My Files and follow Android's installation prompt. Turn the temporary install-source allowance off afterwards.
-5. Open the navy seahorse Shift Calendar icon. Long-press in the app drawer to add to Home, or use Menu > Settings / backup > Add home-screen shortcut and approve the launcher prompt.
+5. Open the navy seahorse Shift Calendar icon. Long-press in the app drawer to add to Home, or use Settings > Settings / backup > Add home-screen shortcut and approve the launcher prompt.
 
 EXACT README FAST-ENTRY TEST
 1. Add personnel Mark, Bill and Tate and post Hotel. Names/posts must match saved records.
 2. Create Hotel required shifts for Oct 1-31 2026, 6 PM-6 AM, all weekdays, required personnel 1. This tells the app which nights need coverage.
-3. Open Menu > Enter schedules. Select year 2026 and the intended time zone, e.g. America/New_York. Enable 'Also create any missing required shifts' for the September/November dates in this example (or create those requirements first).
+3. Open Settings > Enter schedules. Select year 2026 and the intended time zone, e.g. America/New_York. Enable 'Also create any missing required shifts' for the September/November dates in this example (or create those requirements first).
 4. Paste or type these blocks in any order. Leading README bullet markers are also accepted:
 
 Mark
@@ -38,8 +38,8 @@ Hotel
 8. Re-entering the same data must add no duplicate assignments.
 
 FILTERS AND PRINTABLE EXPORT
-Menu > Schedule > Filters / search includes from/through start dates, personnel, post, shift/time, coverage and search. Apply filters. Saved conflicts are normally absent because overlapping assignments are blocked.
-Menu > Share / TXT includes date/person/post selection and printable grouping. Save .txt locally or Copy for Word. Transfer by USB to Windows 11, open in Notepad, select/copy and paste into Word to print. This actual transfer/printing path still needs device acceptance.
+Settings > Schedule > Filters / search includes from/through start dates, personnel, post, shift/time, coverage and search. Apply filters. Saved conflicts are normally absent because overlapping assignments are blocked.
+Settings > Share / TXT includes date/person/post selection and printable grouping. Save .txt locally or Copy for Word. Transfer by USB to Windows 11, open in Notepad, select/copy and paste into Word to print. This actual transfer/printing path still needs device acceptance.
 
 SMS / TABLET / HANDWRITING
 Manual SMS opens the installed Messages composer for your review and sending. Direct SMS is off by default, requires opt-in/permission/carrier hardware/default SIM and final recipient review. It never automatically broadcasts schedule changes. Test only intended recipients. A Wi-Fi-only tablet cannot send carrier SMS: export/copy and transfer to a messaging-capable phone.
@@ -51,6 +51,16 @@ Backups are encrypted; their password cannot be recovered. Source/build scripts,
 
 
 NEW IN PREVIEW03
-Menu → Templates manages independent patterns; Use selects dates/post and shows review. Share / TXT → Choose people for SMS selects arbitrary recipients; review/copy/individual composer and opt-in confirmed direct sending remain separate. Schedule → Filters / search includes sort field and ascending/descending controls.
+Settings → Templates manages independent patterns; Use selects dates/post and shows review. Share / TXT → Choose people for SMS selects arbitrary recipients; review/copy/individual composer and opt-in confirmed direct sending remain separate. Schedule → Filters / search includes sort field and ascending/descending controls.
 
-This preview uses schema2 and backup JSON2. Old schema1 records migrate without deleting schedules and old backup JSON1 is accepted. New backups containing templates cannot be opened by old previews. These database/backup tests do not establish Android package upgrade compatibility: this is still debug-signed. Use a clean test device/profile unless the installed signing certificate matches, and keep data-bearing installs/backups intact.
+This preview uses schema3 and backup JSON2. Old schema1 records migrate without deleting schedules and old backup JSON1 is accepted. New backups containing templates cannot be opened by old previews. These database/backup tests do not establish Android package upgrade compatibility: this is still debug-signed. Use a clean test device/profile unless the installed signing certificate matches, and keep data-bearing installs/backups intact.
+
+
+NEW IN PREVIEW04 — SIMPLE HOME AND MONTH RESET
+The home screen shows a complete month, saved-shift counts on its dates, and the full month's names, posts and times below. Tap a date to narrow the list; Show whole month restores it. Tap a saved row to edit. Add shifts opens personnel-first entry; Settings contains other tools. The last viewed month is remembered. On first use, an existing scheduled month nearest today is selected.
+
+To start October 2026 again: navigate to October 2026, tap Settings, then Clear October 2026. Review the shift/assignment counts and tap Clear month. Cancel changes nothing. This removes requirements AND assignments whose local START dates are in that month; people, posts, templates and other months remain. September 30 overnight remains; October 31 overnight is removed. Undo clear October 2026 restores the previous roster, including after reopening the app, until the next saved roster change or another clear. Undo is local, not included in exported backups.
+
+Schema1 (preview02) and schema2 (preview03) migrate transactionally to schema3 without deleting schedules. Backup JSON stays version2 and old version1 backups remain readable. The reset recovery snapshot is in the app-private database with the roster. Never clear Android app storage to reset a month.
+
+Preview02 signing certificate: 494d169ab0bd4bc704af8465b0d6c8bae8b3184c6b6e3a21ec2dee318e56a7b5. Compare the new artifact's apk-signature.txt before attempting an in-place update. We do not have a verified matching signing key. Preserve your installed preview02 and export its encrypted backup/password before any transition; a new APK must not be described as an in-place-compatible update without signature verification.

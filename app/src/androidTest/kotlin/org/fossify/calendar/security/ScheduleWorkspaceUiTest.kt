@@ -43,7 +43,7 @@ class ScheduleWorkspaceUiTest {
     private fun press(s:ActivityScenario<ShiftActivity>,label:String) {s.onActivity {a->
         var target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}
         if(!target.isShown) {
-            all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Menu"}.performClick()
+            all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Settings"}.performClick()
             target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}
         }
         assertTrue("Navigation target is hidden: $label",target.isShown)
@@ -63,7 +63,7 @@ class ScheduleWorkspaceUiTest {
         val b=ScheduleEntry.shift(month.atDay(2),post.id,"Night",LocalTime.of(18,0),LocalTime.of(6,0),"America/New_York",1)
         ScheduleStore(context).use {it.save(0,Roster(listOf(p),listOf(post),listOf(a,b),listOf(Assignment(a.id,p.id))))}
         ActivityScenario.launch(ShiftActivity::class.java).use {s->
-            waitFor(s,"Required shifts");capture("calendar")
+            waitFor(s,"Add shifts");capture("calendar")
             press(s,"Schedule");waitFor(s,"PARTIALLY FILLED · 1/2 assigned · 1 open");capture("schedule")
             press(s,"Uncovered");waitFor(s,"UNFILLED · 0/1 assigned · 1 open");capture("uncovered")
             press(s,"Share / TXT");waitFor(s,"Copy for Word");press(s,"Copy for Word");settle()
@@ -79,7 +79,7 @@ class ScheduleWorkspaceUiTest {
     }
     @Test fun keyboardDraftSurvivesLandscapeAndPortrait() {
         ActivityScenario.launch(ShiftActivity::class.java).use {s->
-            waitFor(s,"Required shifts");press(s,"Personnel");waitFor(s,"Add person");press(s,"Add person");waitFor(s,"Save person")
+            waitFor(s,"Add shifts");press(s,"Personnel");waitFor(s,"Add person");press(s,"Add person");waitFor(s,"Save person")
             s.onActivity {a->val field=all(a.window.decorView).filterIsInstance<EditText>().first {it.hint.toString()=="Name"};field.setText("Draft Person");field.requestFocus();(a.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(field,InputMethodManager.SHOW_IMPLICIT)}
             settle()
             s.onActivity {it.requestedOrientation=ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE};settle()
