@@ -36,6 +36,7 @@ class ShiftActivity : Activity() {
     private var screen = "calendar"
     private var month = YearMonth.now()
     private var day: LocalDate? = null
+    private var undoMonth: String? = null
     private val drafts = mutableMapOf<String,Map<String,String>>()
     private val controls = linkedMapOf<String,()->String>()
     private var pendingFile: String? = null
@@ -66,8 +67,14 @@ class ShiftActivity : Activity() {
         val destination=screen
         store=ScheduleStore(applicationContext)
         text("Opening Shift Calendar…",22)
-        background({store.read()}) { result ->
-            current=result;ready=true;render(destination)
+        background({store.read() to store.resetMonth()}) { result ->
+            current=result.first;undoMonth=result.second
+            if(savedInstanceState==null) {
+                month=runCatching { YearMonth.parse(prefs.getString("calendar-month",null)) }.getOrNull()
+                    ?: r.shifts.map { YearMonth.from(it.startTime()) }.distinct().minByOrNull { kotlin.math.abs(java.time.temporal.ChronoUnit.MONTHS.between(YearMonth.now(),it)) }
+                    ?: YearMonth.now()
+            }
+            ready=true;render(destination)
             ShiftNotifications.reschedule(this,r)
         }
     }
@@ -108,12 +115,14 @@ class ShiftActivity : Activity() {
         header.addView(TextView(this).apply { text="Shift Calendar\n${BuildConfig.VERSION_NAME}";textSize=16f;setTextColor(navy);setPadding(dp(8),0,dp(4),0) },LinearLayout.LayoutParams(0,-2,1f))
         body.addView(header)
         val navigation=LinearLayout(this).apply {orientation=LinearLayout.VERTICAL;visibility=View.GONE}
-        button("Menu",header) {navigation.visibility=if(navigation.visibility==View.VISIBLE) View.GONE else View.VISIBLE}.apply {
-            minWidth=0;minimumWidth=0;setPadding(dp(4),0,dp(4),0);contentDescription="Show or hide navigation menu"
-            layoutParams=LinearLayout.LayoutParams(dp(72),dp(48))
+        button("Settings",header) {navigation.visibility=if(navigation.visibility==View.VISIBLE) View.GONE else View.VISIBLE}.apply {
+            minWidth=0;minimumWidth=0;setPadding(dp(4),0,dp(4),0);contentDescription="Show or hide settings and tools"
+            layoutParams=LinearLayout.LayoutParams(dp(100),dp(48))
         }
         body.addView(navigation)
-        buttons("Calendar" to {calendar()},"Schedule" to {board()},"Uncovered" to {board(true)},"Personnel" to {people()},"Posts" to {posts()},"Templates" to {templates()},"Share / TXT" to {export()},"Settings / backup" to {settings()},"Enter schedules" to {bulk()},parent=navigation)
+        buttons("Calendar" to {calendar()},"Schedule" to {board()},"Uncovered" to {board(true)},"Personnel" to {people()},"Posts" to {posts()},"Templates" to {templates()},"Share / TXT" to {export()},"Settings / backup" to {settings()},"Enter schedules" to {bulk()},"Required shifts" to {required()},parent=navigation)
+        button("Clear ${month.format(DateTimeFormatter.ofPattern("MMMM uuuu",Locale.US))}",navigation) {clearMonth()}
+        undoMonth?.let { value -> button("Undo clear $value",navigation) {undoClear()} }
         text(title,20,true)
     }
     private fun text(value:String,size:Int=16,bold:Boolean=false,parent:LinearLayout=body):TextView = TextView(this).also {
@@ -171,17 +180,17 @@ class ShiftActivity : Activity() {
             }
         }
     }
-    private fun save(next:Roster,revision:Long=current.revision,after:()->Unit={board()}) {
+    private fun save(next:Roster,revision:Long=current.revision,after:()->Unit={calendar()}) {
         val oldScreen=screen
         background({store.save(revision,next);store.read()}) {
-            current=it;drafts.remove(oldScreen);controls.clear();ShiftNotifications.reschedule(this,r);after()
+            current=it;undoMonth=null;drafts.remove(oldScreen);controls.clear();ShiftNotifications.reschedule(this,r);after()
             Toast.makeText(this,"Saved on this device",Toast.LENGTH_SHORT).show()
         }
     }
     private fun review(next:Roster,affected:List<Shift>,description:String) {
         next.validate();require(affected.size<=500) { "Review at most 500 shifts at a time. Split this batch." }
         val revision=current.revision
-        ask("Review before saving",description+"\n\n"+ScheduleText.format(next,affected),"Save all") { save(next,revision) }
+        ask("Review before saving",description+"\n\n"+ScheduleText.format(next,affected),"Save all") { save(next,revision) { affected.firstOrNull()?.let { month=YearMonth.from(it.startTime()) };day=null;calendar() } }
     }
     private fun monthShifts() = r.shifts.filter { YearMonth.from(it.startTime())==month }
     private fun summary(shifts:List<Shift>,parent:LinearLayout=body) {
@@ -189,13 +198,16 @@ class ShiftActivity : Activity() {
         else text("${shifts.size} shifts · ${shifts.count { r.open(it)>0 }} uncovered · ${shifts.sumOf { r.open(it) }} open",15,true,parent)
     }
     private fun calendar() {
+        prefs.edit().putString("calendar-month",month.toString()).apply()
         page(month.format(DateTimeFormatter.ofPattern("MMMM uuuu",Locale.US)),"calendar")
         val months=LinearLayout(this);body.addView(months)
         listOf<Pair<String,()->Unit>>("Previous" to {month=month.minusMonths(1);day=null;calendar()},"Today" to {month=YearMonth.now();day=LocalDate.now();calendar()},"Next" to {month=month.plusMonths(1);day=null;calendar()}).forEach { (label,action) ->
             button(label,months,action).apply {minWidth=0;minimumWidth=0;setPadding(dp(2),0,dp(2),0);layoutParams=LinearLayout.LayoutParams(0,dp(48),1f)}
         }
-        val shifts=monthShifts();summary(shifts)
-        text("! = open positions. Tap a shift's start date.",12).setPadding(0,dp(2),0,dp(2))
+        button("Add shifts") {bulk()}
+        val shifts=monthShifts()
+        text("${shifts.size} saved shifts · ${shifts.sumOf { r.open(it) }} open positions",16,true)
+        text("Tap a date to see its shifts. Your saved schedule is below.",14).setPadding(0,dp(2),0,dp(2))
         val offset=month.atDay(1).dayOfWeek.value%7
         val headings=LinearLayout(this);body.addView(headings)
         listOf("Sun","Mon","Tue","Wed","Thu","Fri","Sat").forEach { label -> headings.addView(TextView(this).apply { text=label;gravity=Gravity.CENTER;textSize=12f },LinearLayout.LayoutParams(0,dp(24),1f)) }
@@ -207,19 +219,55 @@ class ShiftActivity : Activity() {
                 val v=Button(this).apply {
                     minWidth=0;minimumWidth=0;minHeight=dp(48);setPadding(0,0,0,0);textSize=13f;isAllCaps=false
                     if(n>0) {
-                        val date=month.atDay(n);val open=shifts.filter { it.startTime().toLocalDate()==date }.sumOf { r.open(it) }
-                        text=if(open>0) "$n\n!$open" else n.toString();setTextColor(if(open>0) Color.rgb(164,29,42) else navy)
-                        contentDescription="$date, $open open positions";isSelected=date==day
+                        val date=month.atDay(n);val entries=shifts.filter { it.startTime().toLocalDate()==date };val open=entries.sumOf { r.open(it) }
+                        text=if(entries.isEmpty()) n.toString() else "$n\n${entries.size} shift${if(entries.size==1) "" else "s"}${if(open>0) "\n! $open" else ""}"
+                        setTextColor(if(open>0) Color.rgb(164,29,42) else navy)
+                        if(entries.isNotEmpty()) setTypeface(null,Typeface.BOLD)
+                        if(date==day) backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(198,223,248))
+                        contentDescription="$date, ${entries.size} saved shifts, $open open positions";isSelected=date==day
                         setOnClickListener { if(!busy) {day=date;calendar()} }
                     } else {text="";visibility=View.INVISIBLE}
                 }
-                row.addView(v,LinearLayout.LayoutParams(0,dp(48),1f))
+                row.addView(v,LinearLayout.LayoutParams(0,-2,1f).apply { v.minimumHeight=dp(72) })
             }
         }
-        buttons("Required shifts" to {required()},"Enter schedules" to {bulk()})
-        day?.let { selected -> text(selected.toString(),20,true);val entries=shifts.filter { it.startTime().toLocalDate()==selected };summary(entries);entries.forEach(::shiftCard) }
-        if(day==null) text("Choose a date, or open Schedule to view this month's full roster.")
+        undoMonth?.let { value -> button("Undo clear $value") {undoClear()} }
+        if(day!=null) button("Show whole month") {day=null;calendar()}
+        text(day?.format(DateTimeFormatter.ofPattern("EEEE, MMMM d",Locale.US)) ?: "Saved schedule — whole month",20,true)
+        val entries=shifts.filter { day==null || it.startTime().toLocalDate()==day }.sortedBy {it.startTime().toInstant()}
+        if(entries.isEmpty()) text(if(day==null) "No shifts saved for this month. Tap Add shifts to start." else "No shifts saved for this date.")
+        val time=DateTimeFormatter.ofPattern("h:mm a",Locale.US)
+        entries.forEach { shift ->
+            val names=r.assigned(shift).joinToString(", "){it.name}.ifBlank {"Unassigned"}
+            val end=shift.endTime()
+            val overnight=if(end.toLocalDate()!=shift.startTime().toLocalDate()) " (next day)" else ""
+            button("${shift.startTime().format(DateTimeFormatter.ofPattern("EEE d MMM",Locale.US))} · ${r.posts.first {it.id==shift.postId}.name}\n${shift.startTime().format(time)} – ${end.format(time)}$overnight\n$names${if(r.open(shift)>0) " · ${r.open(shift)} open" else ""}") {editShift(shift)}.apply {
+                gravity=Gravity.START or Gravity.CENTER_VERTICAL;textSize=17f;setPadding(dp(12),dp(10),dp(12),dp(10))
+                contentDescription="Saved shift: ${shift.id}, $names"
+            }
+        }
     }
+    private fun clearMonth() {
+        val selected=month
+        val shifts=monthShifts();val ids=shifts.map {it.id}.toSet()
+        require(shifts.isNotEmpty()) {"There are no saved shifts to clear in this month."}
+        val label=selected.format(DateTimeFormatter.ofPattern("MMMM uuuu",Locale.US))
+        val revision=current.revision
+        ask("Clear $label?","Remove ${shifts.size} shifts and ${r.assignments.count {it.shiftId in ids}} assignments starting in $label?\n\nPeople, posts, templates and other months stay saved. Overnight shifts belong to their start date.\n\nUndo remains available after reopening the app, until your next schedule change or another clear.","Clear month") {
+            background({store.clearMonth(revision,selected);store.read()}) {
+                current=it;undoMonth=label;day=null;ShiftNotifications.reschedule(this,r);calendar()
+            }
+        }
+    }
+    private fun undoClear() {
+        val revision=current.revision
+        ask("Undo month clear?","Restore the schedule from immediately before clearing $undoMonth?","Restore shifts") {
+            background({store.undoClear(revision);store.read()}) {
+                current=it;undoMonth=null;ShiftNotifications.reschedule(this,r);calendar()
+            }
+        }
+    }
+
     private fun board(uncovered:Boolean=false) {
         val tag=if(uncovered) "uncovered" else "board"
         page(if(uncovered) "Uncovered shifts — $month" else "Schedule — $month",tag)

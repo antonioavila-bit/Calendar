@@ -51,7 +51,7 @@ class FeatureGapsDeviceTest {
     private fun press(s:ActivityScenario<ShiftActivity>,label:String) {
         s.onActivity {a->
             var b=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}
-            if(!b.isShown) {all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Menu"}.performClick();b=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}}
+            if(!b.isShown) {all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Settings"}.performClick();b=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}}
             assertTrue(b.isShown);b.performClick()
         }
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
@@ -111,11 +111,11 @@ class FeatureGapsDeviceTest {
         repeat(100) {if(!dialogText().contains("Select SMS recipients")) return;SystemClock.sleep(50)}
         fail("SMS picker was not dismissed")
     }
-    private fun export(s:ActivityScenario<ShiftActivity>) {waitButton(s,"Required shifts");press(s,"Share / TXT");field(s,"From start date (YYYY-MM-DD)","2026-10-01");field(s,"Through start date (YYYY-MM-DD)","2026-10-03")}
+    private fun export(s:ActivityScenario<ShiftActivity>) {waitButton(s,"Add shifts");press(s,"Share / TXT");field(s,"From start date (YYYY-MM-DD)","2026-10-01");field(s,"Through start date (YYYY-MM-DD)","2026-10-03")}
     private fun cardIds(s:ActivityScenario<ShiftActivity>):List<String> {var result=emptyList<String>();s.onActivity {a->result=all(a.window.decorView).mapNotNull {it.contentDescription?.toString()?.takeIf {v->v.startsWith("shift-card:")}}};return result}
     @Test fun templateManagerCreateEditDuplicateDeleteDoesNotChangeShifts() {
         ActivityScenario.launch(ShiftActivity::class.java).use {s->
-            waitButton(s,"Required shifts");press(s,"Templates");press(s,"Add template");field(s,"Template name","Patrol");press(s,"Save template");waitButton(s,"Add template")
+            waitButton(s,"Add shifts");press(s,"Templates");press(s,"Add template");field(s,"Template name","Patrol");press(s,"Save template");waitButton(s,"Add template")
             assertEquals(initial.shifts.toSet(),read().roster.shifts.toSet());assertEquals(1,read().roster.templates.size)
             press(s,"Edit Patrol");field(s,"Template required personnel","3");press(s,"Save template");waitButton(s,"Add template");assertEquals(3,read().roster.templates.single().required)
             press(s,"Edit Patrol");press(s,"Duplicate template");press(s,"Save template");waitButton(s,"Add template");assertEquals(2,read().roster.templates.size)
@@ -126,9 +126,9 @@ class FeatureGapsDeviceTest {
     @Test fun templateApplyRequiresReviewCancelThenSave() {
         seedTemplate()
         ActivityScenario.launch(ShiftActivity::class.java).use {s->
-            waitButton(s,"Required shifts");press(s,"Templates");press(s,"Use Patrol");field(s,"Template dates","Oct 4-5");field(s,"Template year","2026");press(s,"Review template shifts")
+            waitButton(s,"Add shifts");press(s,"Templates");press(s,"Use Patrol");field(s,"Template dates","Oct 4-5");field(s,"Template year","2026");press(s,"Review template shifts")
             waitDialog("2 new requirements");capture("template-apply-review");assertEquals(3,read().roster.shifts.size);dialogClick("Cancel");assertEquals(3,read().roster.shifts.size)
-            press(s,"Review template shifts");waitDialog("2 new requirements");dialogClick("Save all");waitButton(s,"Copy a date range / week")
+            press(s,"Review template shifts");waitDialog("2 new requirements");dialogClick("Save all");waitButton(s,"Add shifts")
             val r=read().roster;assertEquals(5,r.shifts.size);assertEquals(initial.assignments.toSet(),r.assignments.toSet());assertEquals(2,r.shifts.first {it.startTime().dayOfMonth==4}.required)
         }
     }
@@ -167,7 +167,7 @@ class FeatureGapsDeviceTest {
     }
     @Test fun boardSortAndDirectionPreserveFiltersAndRecreation() {
         ActivityScenario.launch(ShiftActivity::class.java).use {s->
-            waitButton(s,"Required shifts");press(s,"Schedule");press(s,"Filters / search")
+            waitButton(s,"Add shifts");press(s,"Schedule");press(s,"Filters / search")
             field(s,"From start date (YYYY-MM-DD)","2026-10-01");field(s,"Through start date (YYYY-MM-DD)","2026-10-02")
             choose(s,"Post / location");choose(s,"Ascending");press(s,"Apply filters")
             assertEquals(listOf("shift-card:s2","shift-card:s1"),cardIds(s))
@@ -214,4 +214,74 @@ class FeatureGapsDeviceTest {
         ScheduleStore(context).use {store->assertTrue(runCatching {store.save(before.revision,before.roster)}.isFailure)}
         assertEquals(after,read());assertTrue(runCatching {ShiftTemplates.put(Roster(),template)}.isFailure)
     }
+    @Test fun calendarShowsSavedNamesAndMonthClearCancelUndoSurvivesRecreation() {
+        context.getSharedPreferences("security-settings",Context.MODE_PRIVATE).edit().putString("calendar-month","2026-10").commit()
+        ActivityScenario.launch(ShiftActivity::class.java).use {s->
+            waitButton(s,"Add shifts")
+            s.onActivity {a->
+                val views=all(a.window.decorView)
+                assertTrue(views.filterIsInstance<Button>().any {it.isShown && it.text.toString().contains("Alex, Blair")})
+                assertTrue(views.filterIsInstance<Button>().any {it.isShown && it.text.toString().contains("1 shift")})
+                assertFalse(views.filterIsInstance<Button>().first {it.text.toString()=="Personnel"}.isShown)
+            }
+            capture("simple-calendar-saved-month")
+            press(s,"Clear October 2026");waitDialog("Remove 3 shifts and 4 assignments")
+            dialogClick("Cancel");assertEquals(initial.shifts.toSet(),read().roster.shifts.toSet())
+            press(s,"Clear October 2026");waitDialog("Remove 3 shifts and 4 assignments");dialogClick("Clear month")
+            waitButton(s,"Undo clear October 2026");assertTrue(read().roster.shifts.isEmpty())
+            assertEquals(initial.people.toSet(),read().roster.people.toSet())
+            s.recreate();waitButton(s,"Undo clear October 2026")
+            press(s,"Undo clear October 2026");waitDialog("Restore the schedule");dialogClick("Restore shifts")
+            repeat(100) {if(read().roster.shifts.isEmpty()) SystemClock.sleep(100)}
+            assertEquals(initial.shifts.toSet(),read().roster.shifts.toSet())
+            assertEquals(initial.assignments.toSet(),read().roster.assignments.toSet())
+        }
+    }
+    @Test fun monthResetPreservesAdjacentMonthsAndTemplatesAndRejectsStaleChanges() {
+        val september=initial.shifts.first().copy(id="sep",start="2026-09-30T18:00",end="2026-10-01T06:00")
+        val november=initial.shifts.first().copy(id="nov",start="2026-11-01T18:00",end="2026-11-02T06:00")
+        val octoberEnd=initial.shifts.first().copy(id="oct-end",start="2026-10-31T18:00",end="2026-11-01T06:00")
+        val before=initial.copy(shifts=initial.shifts+listOf(september,november,octoberEnd),templates=listOf(template))
+        ScheduleStore(context).use {store->
+            store.save(store.read().revision,before)
+            val revision=store.read().revision
+            assertTrue(runCatching {store.clearMonth(revision-1,java.time.YearMonth.of(2026,10))}.isFailure)
+            assertEquals(before.shifts.toSet(),store.read().roster.shifts.toSet())
+            store.clearMonth(revision,java.time.YearMonth.of(2026,10))
+            assertEquals(setOf("sep","nov"),store.read().roster.shifts.map {it.id}.toSet())
+            assertEquals(before.templates,store.read().roster.templates)
+            assertTrue(store.read().roster.assignments.isEmpty())
+        }
+        ScheduleStore(context).use {store->
+            assertEquals("October 2026",store.resetMonth())
+            store.undoClear(store.read().revision)
+            assertEquals(before.shifts.toSet(),store.read().roster.shifts.toSet())
+            assertEquals(before.assignments.toSet(),store.read().roster.assignments.toSet())
+            assertNull(store.resetMonth())
+            store.clearMonth(store.read().revision,java.time.YearMonth.of(2026,10))
+            val cleared=store.read()
+            assertTrue(runCatching {store.clearMonth(cleared.revision,java.time.YearMonth.of(2026,10))}.isFailure)
+            assertEquals("October 2026",store.resetMonth())
+            store.save(cleared.revision,cleared.roster.copy(people=cleared.roster.people+Person("new","New person")))
+            val edited=store.read()
+            assertNull(store.resetMonth())
+            assertTrue(runCatching {store.undoClear(edited.revision)}.isFailure)
+            assertEquals(edited,store.read())
+        }
+    }
+    @Test fun schemaTwoUpgradePreservesRosterAndEnablesUndo() {
+        seedTemplate()
+        ScheduleStore(context).use {store->
+            store.writableDatabase.execSQL("DROP TABLE month_reset")
+            store.writableDatabase.version=2
+        }
+        ScheduleStore(context).use {store->
+            assertEquals(initial.shifts.toSet(),store.read().roster.shifts.toSet())
+            assertEquals(listOf(template),store.read().roster.templates)
+            store.clearMonth(store.read().revision,java.time.YearMonth.of(2026,10))
+            store.undoClear(store.read().revision)
+            assertEquals(initial.assignments.toSet(),store.read().roster.assignments.toSet())
+        }
+    }
+
 }

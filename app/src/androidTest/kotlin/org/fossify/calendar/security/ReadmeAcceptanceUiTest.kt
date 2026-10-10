@@ -44,7 +44,7 @@ class ReadmeAcceptanceUiTest {
     private fun press(s:ActivityScenario<ShiftActivity>,text:String) {
         s.onActivity {a->
             var target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==text}
-            if(!target.isShown) {all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Menu"}.performClick();target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==text}}
+            if(!target.isShown) {all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Settings"}.performClick();target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==text}}
             assertTrue(target.isShown);target.performClick()
         }
     }
@@ -61,7 +61,7 @@ class ReadmeAcceptanceUiTest {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync()
     }
     private fun enter(s:ActivityScenario<ShiftActivity>,input:String) {
-        waitFor(s,"Required shifts");press(s,"Enter schedules");waitFor(s,"Review and sort schedules")
+        waitFor(s,"Add shifts");press(s,"Enter schedules");waitFor(s,"Review and sort schedules")
         field(s,"Year for dates without a year","2026");field(s,"Time zone","America/New_York");field(s,"Schedule entries",input)
         press(s,"Review and sort schedules")
     }
@@ -71,7 +71,7 @@ class ReadmeAcceptanceUiTest {
             val t=waitDialog("29 new assignments")
             listOf("Parsed person: Mark","Parsed person: Bill","Parsed person: Tate","Date/range entered: Oct 14-25","Shift time: 6 PM-6 AM","Post/location: Hotel","Conflicts: none","Ambiguous or missing fields: none").forEach {assertTrue("Missing $it",t.contains(it))}
             ScheduleStore(context).use {assertTrue(it.read().roster.assignments.isEmpty())}
-            dialogButton("Save all");waitFor(s,"Copy a date range / week")
+            dialogButton("Save all");waitFor(s,"Add shifts")
             ScheduleStore(context).use {store->val r=store.read().roster;assertEquals(29,r.assignments.size);assertEquals((3..13).map {LocalDate.of(2026,10,it)},r.shifts.filter {r.open(it)>0}.map {it.startTime().toLocalDate()}.sorted())}
         }
     }
@@ -89,7 +89,7 @@ class ReadmeAcceptanceUiTest {
     }
     @Test fun boardHasDateTimeCoverageAndSearchFilters() {
         ActivityScenario.launch(ShiftActivity::class.java).use {s->
-            waitFor(s,"Required shifts");press(s,"Schedule");waitFor(s,"Filters / search");press(s,"Filters / search")
+            waitFor(s,"Add shifts");press(s,"Schedule");waitFor(s,"Filters / search");press(s,"Filters / search")
             field(s,"From start date (YYYY-MM-DD)","2026-10-03");field(s,"Through start date (YYYY-MM-DD)","2026-10-04");field(s,"Search names, posts, shifts or notes","Hotel")
             s.onActivity {a->
                 val spinners=all(a.window.decorView).filterIsInstance<Spinner>()

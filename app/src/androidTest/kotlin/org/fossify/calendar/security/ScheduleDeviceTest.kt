@@ -74,7 +74,7 @@ class ScheduleDeviceTest {
     private fun press(s:ActivityScenario<ShiftActivity>,label:String) {s.onActivity {a->
         var target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}
         if(!target.isShown) {
-            all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Menu"}.performClick()
+            all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()=="Settings"}.performClick()
             target=all(a.window.decorView).filterIsInstance<Button>().first {it.text.toString()==label}
         }
         assertTrue("Navigation target is hidden: $label",target.isShown)
@@ -82,11 +82,11 @@ class ScheduleDeviceTest {
     }}
     @Test fun launcherAndPersonEntryPersistWithoutNetwork() {
         ActivityScenario.launch(ShiftActivity::class.java).use {s->
-            waitFor(s,"Required shifts");press(s,"Personnel");waitFor(s,"Add person");press(s,"Add person");waitFor(s,"Save person")
+            waitFor(s,"Add shifts");press(s,"Personnel");waitFor(s,"Add person");press(s,"Add person");waitFor(s,"Save person")
             s.onActivity {a->all(a.window.decorView).filterIsInstance<EditText>().first {it.hint.toString()=="Name"}.setText("Test Person")}
             press(s,"Save person");waitFor(s,"Add person")
             ScheduleStore(context).use {assertEquals("Test Person",it.read().roster.people.single().name)}
-            press(s,"Calendar");waitFor(s,"Required shifts")
+            press(s,"Calendar");waitFor(s,"Add shifts")
             val automation=InstrumentationRegistry.getInstrumentation().uiAutomation
             val screenshot=automation.takeScreenshot()
             if(screenshot!=null) {File(context.getExternalFilesDir(null),"shift-calendar-screen.png").outputStream().use {screenshot.compress(Bitmap.CompressFormat.PNG,100,it)};screenshot.recycle()}
@@ -94,6 +94,6 @@ class ScheduleDeviceTest {
     }
     @Test fun dataSurvivesActivityRecreation() {
         ScheduleStore(context).use {it.save(0,sample())}
-        ActivityScenario.launch(ShiftActivity::class.java).use {s->waitFor(s,"Required shifts");s.recreate();waitFor(s,"Required shifts");ScheduleStore(context).use {assertEquals(2,it.read().roster.shifts.size)}}
+        ActivityScenario.launch(ShiftActivity::class.java).use {s->waitFor(s,"Add shifts");s.recreate();waitFor(s,"Add shifts");ScheduleStore(context).use {assertEquals(2,it.read().roster.shifts.size)}}
     }
 }
