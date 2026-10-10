@@ -11,3 +11,6 @@ Verification added: three instrumentation cases for visible saved names/counts a
 Local Gradle verification was attempted but blocked downloading the Gradle distribution (network unavailable). git diff --check passed. No local APK/emulator success is claimed. Use one consolidated CI build with both device jobs; inspect results before delivery. Update this document with the verified outcome.
 
 Signing: preview02 certificate 494d169ab0bd4bc704af8465b0d6c8bae8b3184c6b6e3a21ec2dee318e56a7b5; stable protected signing remains unresolved. Do not uninstall a data-bearing app. Preserve encrypted backup/password; compare actual built certificate. Samsung physical layouts/large fonts/stylus and carrier SMS remain unverified.
+
+## Verified result
+Run 38090526843 succeeded: 81 JVM tests and 28 device tests on each API33/API35. APK/source digests verified. See VERIFIED_PREVIEW04.md for exact evidence and confirmed preview02 certificate mismatch. No extra build needed for this documentation-only update.
